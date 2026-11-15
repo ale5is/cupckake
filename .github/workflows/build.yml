@@ -1,4 +1,4 @@
-name: Build Simple Voice Chat for Horizon
+name: Package Simple Voice Chat native mod
 
 on:
   workflow_dispatch:
@@ -11,91 +11,27 @@ permissions:
   contents: read
 
 jobs:
-  build:
-    name: Build Horizon client with Simple Voice Chat (${{ matrix.os }})
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 120
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: ubuntu-latest
-            rust_target: x86_64-unknown-linux-gnu
-            executable: horizon-client
-            archive: simple-voice-chat-horizon-linux-x86_64
-          - os: windows-latest
-            rust_target: x86_64-pc-windows-msvc
-            executable: horizon-client.exe
-            archive: simple-voice-chat-horizon-windows-x86_64
+  package:
+    name: Build and validate .hnmod package
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
     steps:
-      - name: Checkout mod
+      - name: Checkout mod sources
         uses: actions/checkout@v4
+      - name: Install Python
+        uses: actions/setup-python@v5
         with:
-          path: cupckake
-      - name: Checkout pinned Horizon
-        uses: actions/checkout@v4
-        with:
-          repository: horizon-rust/horizon
-          ref: 4b08a43f1d32c3946f2638850f9d120bc7ff4a26
-          path: horizon
-          fetch-depth: 1
-      - name: Checkout pinned horizon-mixins
-        uses: actions/checkout@v4
-        with:
-          repository: horizon-rust/horizon-mixins
-          ref: e59da9094f0c2fdda6c627fe9eff22dec6a906f0
-          path: horizon-mixins
-          fetch-depth: 1
-      - name: Install Linux build dependencies
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-      - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: |
-            horizon-mixins -> target
-            horizon -> target
-      - name: Fetch locked dependencies
-        shell: bash
-        run: |
-          cargo fetch --locked --manifest-path horizon-mixins/Cargo.toml
-          cargo fetch --locked --manifest-path horizon/Cargo.toml --target ${{ matrix.rust_target }}
-      - name: Build mixin compiler
-        run: cargo build --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli
-      - name: Stage Simple Voice Chat into Horizon
-        shell: bash
-        run: |
-          find horizon -type l -delete
-          mkdir -p mods/simple-voice-chat
-          cp -a cupckake/mixins/simple-voice-chat/. mods/simple-voice-chat/
-          cargo run --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli -- apply --workspace horizon --mods mods --out staged-horizon
-      - name: Build optimized Horizon client with the mod
-        working-directory: staged-horizon
-        run: cargo build --release --locked --offline --package horizon-client --target ${{ matrix.rust_target }} --target-dir ../build-target
-      - name: Prepare distributable package
-        shell: bash
-        run: |
-          mkdir -p dist
-          cp "build-target/${{ matrix.rust_target }}/release/${{ matrix.executable }}" "dist/${{ matrix.executable }}"
-          cp cupckake/horizon-native.json dist/
-          cat > dist/BUILD-INFO.txt <<'EOF'
-          Simple Voice Chat for Horizon
-          Game: Minecraft Java 26.3
-          Horizon revision: 4b08a43f1d32c3946f2638850f9d120bc7ff4a26
-          horizon-mixins revision: e59da9094f0c2fdda6c627fe9eff22dec6a906f0
-          Build: optimized release
-          This is a Horizon client executable with Simple Voice Chat integrated.
-          EOF
-          cd dist
-          7z a "../${{ matrix.archive }}.zip" .
-      - name: Upload compiled package
+          python-version: "3.12"
+      - name: Package native mod
+        run: python tools/package.py
+      - name: Install Horizon native mod validator
+        run: cargo install --locked --git https://github.com/horizon-rust/horizon --rev 4b08a43f1d32c3946f2638850f9d120bc7ff4a26 cargo-horizon-mod
+      - name: Validate .hnmod with Horizon
+        run: cargo horizon-mod check target/simple-voice-chat-1.0.1.hnmod
+      - name: Upload launcher-installable package
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.archive }}
-          path: ${{ matrix.archive }}.zip
+          name: simple-voice-chat-hnmod
+          path: target/simple-voice-chat-1.0.1.hnmod
           if-no-files-found: error
           retention-days: 30
