@@ -30,7 +30,7 @@ jobs:
       - name: Test client crate
         run: cargo test --locked --workspace
   horizon-integration:
-    name: Check mixin against current Horizon
+    name: Check mixin against pinned Horizon and Mixins
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -39,11 +39,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: horizon-rust/horizon
+          ref: 4b08a43f1d32c3946f2638850f9d120bc7ff4a26
           path: horizon
           fetch-depth: 1
       - uses: actions/checkout@v4
         with:
           repository: horizon-rust/horizon-mixins
+          ref: e59da9094f0c2fdda6c627fe9eff22dec6a906f0
           path: horizon-mixins
           fetch-depth: 1
       - name: Install Linux audio headers
@@ -60,7 +62,7 @@ jobs:
       - name: Test standalone voice client
         working-directory: cupckake
         run: cargo test --locked --workspace
-      - name: Build horizon-mixins
+      - name: Build pinned horizon-mixins CLI
         run: cargo build --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli
       - name: Remove upstream documentation symlinks
         run: find horizon -type l -delete
@@ -68,15 +70,15 @@ jobs:
         run: cargo fetch --locked --manifest-path horizon/Cargo.toml --target x86_64-unknown-linux-gnu
       - name: Stage mod bundle
         run: |
-          mkdir -p mods/simple-voice-chat
-          cp -a cupckake/mixins/simple-voice-chat/. mods/simple-voice-chat/
+          mkdir -p mods/simple_voice_chat
+          cp -a cupckake/mixins/simple-voice-chat/. mods/simple_voice_chat/
       - name: Verify native hook API metadata
         run: |
           python - <<'PY'
           import json
           import re
           from pathlib import Path
-          metadata = json.loads(Path("cupckake/horizon-native.json").read_text())
+          metadata = json.loads(Path("cupckake/compatibility.json").read_text())
           source = Path("horizon/crates/horizon-client/src/game/native_hooks.rs").read_text()
           match = re.search(r"pub\(crate\) const NATIVE_HOOKS_API: u32 = (\d+);", source)
           if not match:
@@ -87,7 +89,7 @@ jobs:
               raise SystemExit(f"mod requires hooks API {required}, Horizon provides {available}")
           print(f"Native hook API OK: requires {required}, Horizon provides {available}")
           PY
-      - name: Check native mod against Horizon
+      - name: Check native mod against pinned Horizon
         run: |
           cargo run --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli -- check \
             --workspace horizon \

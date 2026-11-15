@@ -27,11 +27,11 @@ jobs:
       - name: Install Horizon native mod validator
         run: cargo install --locked --git https://github.com/horizon-rust/horizon --rev 4b08a43f1d32c3946f2638850f9d120bc7ff4a26 cargo-horizon-mod
       - name: Validate .hnmod with Horizon
-        run: cargo horizon-mod check target/simple-voice-chat-1.0.1.hnmod
+        run: cargo horizon-mod check target/simple_voice_chat-1.0.1.hnmod
       - name: Upload launcher-installable package
         uses: actions/upload-artifact@v4
         with:
           name: simple-voice-chat-hnmod
-          path: target/simple-voice-chat-1.0.1.hnmod
+          path: target/simple_voice_chat-1.0.1.hnmod
           if-no-files-found: error
           retention-days: 30
