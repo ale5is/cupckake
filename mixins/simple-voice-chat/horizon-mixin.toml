@@ -5,7 +5,7 @@ priority = 100
 
 # The commit it was built and tested on.
 [compatibility]
-horizon_revision = "4b08a43f1d32c3946f2638850f9d120bc7ff4a26"
+horizon_revision = "6475f62f3c834b7489e1816bf47f47ea5eb2b879"
 
 [[module]]
 id = "runtime"
