@@ -77,10 +77,29 @@ jobs:
         run: cargo build --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli
       - name: Remove upstream documentation symlinks
         run: find horizon -type l -delete
+      - name: Fetch Horizon workspace dependencies for offline check
+        run: cargo fetch --locked --manifest-path horizon/Cargo.toml --target x86_64-unknown-linux-gnu
       - name: Stage mod bundle
         run: |
           mkdir -p mods/simple-voice-chat
           cp -a cupckake/mixins/simple-voice-chat/. mods/simple-voice-chat/
+      - name: Verify native hook API metadata
+        run: |
+          python - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+          metadata = json.loads(Path("cupckake/horizon-native.json").read_text())
+          source = Path("horizon/crates/horizon-client/src/game/native_hooks.rs").read_text()
+          match = re.search(r"pub\\(crate\\) const NATIVE_HOOKS_API: u32 = (\\d+);", source)
+          if not match:
+              raise SystemExit("NATIVE_HOOKS_API not found")
+          available = int(match.group(1))
+          required = int(metadata["hooks"])
+          if required > available:
+              raise SystemExit(f"mod requires hooks API {required}, Horizon provides {available}")
+          print(f"Native hook API OK: requires {required}, Horizon provides {available}")
+          PY
       - name: Check native mod against Horizon
         run: |
           cargo run --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli -- check \
