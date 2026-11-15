@@ -65,6 +65,9 @@ def main():
         f"mixins/{mod_id}/horizon-mixin.toml",
         f"mixins/{mod_id}/runtime.rs",
         f"mixins/{mod_id}/crates/svc_client/Cargo.toml",
+        f"mixins/{mod_id}/crates/svc_client/build.rs",
+        f"mixins/{mod_id}/crates/svc_client/vendor/src/opus.c",
+        f"mixins/{mod_id}/crates/svc_client/vendor/config.h",
     ]
     missing = [name for name in required if name not in files]
     if missing:
