@@ -21,6 +21,16 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 https://github.com/Sparticle62ops/horizon-simple-voice-chat.git upstream
+          python - <<'PY'
+          from pathlib import Path
+          import shutil
+          root = Path(".")
+          for path in list(root.iterdir()):
+              if path.name != "upstream":
+                  shutil.rmtree(path) if path.is_dir() else path.unlink()
+          for path in list(root.rglob(".deps")):
+              shutil.rmtree(path)
+          PY
           cp -a upstream/. .
           rm -rf upstream .git
           git init
