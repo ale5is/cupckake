@@ -9,7 +9,7 @@ cargo test --workspace
 On Linux, install the ALSA development headers before building:
 
 ```sh
-sudo apt-get install libasound2-dev
+sudo apt-get install libasound2-dev libudev-dev pkg-config
 ```
 
 The native bundle is checked against a Horizon checkout with the matching
