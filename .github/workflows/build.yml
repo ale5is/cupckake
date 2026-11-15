@@ -3,6 +3,7 @@ name: Build Simple Voice Chat for Horizon
 on:
   workflow_dispatch:
   push:
+    branches: [main]
     tags:
       - "simple-voice-chat-v*"
 
