@@ -1,0 +1,77 @@
+name: Simple Voice Chat compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  client-tests:
+    name: svc_client tests (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux audio headers
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Test client crate
+        run: cargo test --locked --workspace
+
+  horizon-integration:
+    name: Check mixin against current Horizon
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: cupckake
+      - uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon
+          path: horizon
+          fetch-depth: 1
+      - uses: actions/checkout@v4
+        with:
+          repository: horizon-rust/horizon-mixins
+          path: horizon-mixins
+          fetch-depth: 1
+      - name: Install Linux audio headers
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            cupckake -> target
+            horizon-mixins -> target
+            horizon -> target
+      - name: Test standalone voice client
+        working-directory: cupckake
+        run: cargo test --locked --workspace
+      - name: Build horizon-mixins
+        run: cargo build --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli
+      - name: Stage mod bundle
+        run: |
+          mkdir -p mods/simple-voice-chat
+          cp -a cupckake/mixins/simple-voice-chat/. mods/simple-voice-chat/
+      - name: Check native mod against Horizon
+        run: |
+          cargo run --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli -- check \
+            --workspace horizon \
+            --mods mods \
+            --out target/simple-voice-chat-horizon \
+            --trust-native-mods \
+            --package horizon-client
