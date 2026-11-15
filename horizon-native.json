@@ -1,9 +1,9 @@
 {
   "schema": 1,
   "id": "simple-voice-chat",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "game": "26.3",
-  "horizon": "4b08a43f1d32c3946f2638850f9d120bc7ff4a26",
+  "horizon": "6475f62f3c834b7489e1816bf47f47ea5eb2b879",
   "mixins": "e59da9094f0c2fdda6c627fe9eff22dec6a906f0",
-  "hooks": 645
+  "hooks": 359
 }
