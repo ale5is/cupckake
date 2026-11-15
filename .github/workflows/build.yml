@@ -27,7 +27,7 @@ jobs:
       - name: Install Horizon native mod validator
         run: cargo install --locked --git https://github.com/horizon-rust/horizon --rev 4b08a43f1d32c3946f2638850f9d120bc7ff4a26 cargo-horizon-mod
       - name: Validate .hnmod with Horizon
-        run: cargo horizon-mod check target/simple_voice_chat-1.0.1.hnmod
+        run: cargo horizon-mod check target/simple_voice_chat-1.0.2.hnmod
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v4
         with:
@@ -36,12 +36,12 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish GitHub Release for launcher installation
-        if: github.event_name == 'workflow_dispatch'
+        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: simple-voice-chat-v1.0.1
+          tag_name: simple-voice-chat-v1.0.2
           target_commitish: ${{ github.sha }}
-          name: Simple Voice Chat 1.0.1 (Horizon native)
+          name: Simple Voice Chat 1.0.2 (Horizon native)
           body: |
             Native Horizon mod package for Minecraft 26.3.
 
