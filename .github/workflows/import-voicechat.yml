@@ -21,8 +21,8 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 https://github.com/Sparticle62ops/horizon-simple-voice-chat.git upstream
-          rsync -a --delete --exclude='.git' --exclude='.deps' upstream/ ./ 
-          rm -rf .git
+          find upstream -mindepth 1 -maxdepth 1 -exec cp -a {} . \\;
+          rm -rf upstream .git .github
           git init
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
