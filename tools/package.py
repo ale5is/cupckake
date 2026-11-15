@@ -45,12 +45,14 @@ def main():
     files = {
         "horizon-native.json": (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
     }
-    data_dirs = [Path("data")] + [Path(c["path"]) / "data" for c in mixin.get("crate", [])]
+    crate_roots = [Path(c["path"]) for c in mixin.get("crate", [])]
+    data_dirs = [Path("data")] + [crate / "data" for crate in crate_roots]
     for path in sorted(BUNDLE.rglob("*")):
         if not path.is_file():
             continue
         relative = path.relative_to(BUNDLE)
         include = path.suffix in (".rs", ".toml")
+        include = include or any(relative.is_relative_to(crate) for crate in crate_roots)
         include = include or any(relative.is_relative_to(folder) for folder in data_dirs)
         if include:
             files[f"mixins/{mod_id}/{relative.as_posix()}"] = path.read_bytes()
