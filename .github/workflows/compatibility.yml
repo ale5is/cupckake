@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   client-tests:
@@ -24,27 +24,11 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
-      - name: Install udev development headers
-        if: runner.os == 'Linux'
-        run: sudo apt-get install -y libudev-dev
+          sudo apt-get install -y libasound2-dev libudev-dev pkg-config libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Test client crate
-        run: cargo test --workspace
-      - name: Commit refreshed lockfile
-        if: matrix.os == 'ubuntu-latest'
-        run: |
-          if ! git diff --quiet -- Cargo.lock; then
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add Cargo.lock
-            git commit -m "Refresh standalone voice client lockfile"
-            git fetch origin main
-            git rebase origin/main
-            git push
-          fi
-
+        run: cargo test --locked --workspace
   horizon-integration:
     name: Check mixin against current Horizon
     runs-on: ubuntu-latest
@@ -65,7 +49,7 @@ jobs:
       - name: Install Linux audio headers
         run: |
           sudo apt-get update
-          sudo apt-get install -y libasound2-dev
+          sudo apt-get install -y libasound2-dev libudev-dev pkg-config
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -75,7 +59,7 @@ jobs:
             horizon -> target
       - name: Test standalone voice client
         working-directory: cupckake
-        run: cargo test --workspace
+        run: cargo test --locked --workspace
       - name: Build horizon-mixins
         run: cargo build --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli
       - name: Remove upstream documentation symlinks
