@@ -1,18 +1,22 @@
 # Building and checking
 
-The voice client crate can be tested independently:
+## Create the Horizon native mod package
 
-```sh
-cargo test --workspace
-```
+Requires Python 3.11 or newer.
 
-On Linux, install the ALSA development headers before building:
+    python tools/package.py
 
-```sh
-sudo apt-get install libasound2-dev libudev-dev pkg-config
-```
+This creates target/simple-voice-chat-1.0.1.hnmod. The deterministic archive contains horizon-native.json, all Rust/TOML sources under the mixin bundle (including the nested svc_client crate), applicable data directories and the license notice. The script verifies required crate files and reads the archive back before reporting its SHA-256.
 
-The native bundle is checked against a Horizon checkout with the matching
-`horizon-mixins` CLI. The CI workflow performs this integration check against
-the current upstream main branches and tests the client crate on Linux and
-Windows.
+## Validate and compile
+
+The GitHub Actions workflow installs the Horizon-native validator and runs:
+
+    cargo horizon-mod check target/simple-voice-chat-1.0.1.hnmod
+
+The launcher compiles the source package for the selected Horizon instance. The repository workflow does not compile or distribute a separate full Horizon client.
+
+On Linux, standalone client crate tests may require ALSA development headers:
+
+    sudo apt-get install libasound2-dev libudev-dev pkg-config
+    cargo test --workspace --locked
