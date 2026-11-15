@@ -75,6 +75,8 @@ jobs:
         run: cargo test --workspace
       - name: Build horizon-mixins
         run: cargo build --locked --manifest-path horizon-mixins/Cargo.toml -p horizon-mixins-cli
+      - name: Remove upstream documentation symlinks
+        run: find horizon -type l -delete
       - name: Stage mod bundle
         run: |
           mkdir -p mods/simple-voice-chat
