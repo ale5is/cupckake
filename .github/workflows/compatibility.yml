@@ -91,7 +91,7 @@ jobs:
           from pathlib import Path
           metadata = json.loads(Path("cupckake/horizon-native.json").read_text())
           source = Path("horizon/crates/horizon-client/src/game/native_hooks.rs").read_text()
-          match = re.search(r"pub\\(crate\\) const NATIVE_HOOKS_API: u32 = (\\d+);", source)
+          match = re.search(r"pub\(crate\) const NATIVE_HOOKS_API: u32 = (\d+);", source)
           if not match:
               raise SystemExit("NATIVE_HOOKS_API not found")
           available = int(match.group(1))
