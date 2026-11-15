@@ -173,7 +173,11 @@
 /* #undef USE_ALLOCA */
 
 /* Use C99 variable-size arrays */
-#define VAR_ARRAYS 1
+#if defined(_MSC_VER)
+# define USE_ALLOCA 1
+#else
+# define VAR_ARRAYS 1
+#endif
 
 /* Define to empty if `const' does not conform to ANSI C. */
 /* #undef const */
