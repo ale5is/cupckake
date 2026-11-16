@@ -1,3 +1,16 @@
+#[path = "../../crates/svc_client/src/audio.rs"]
+pub mod audio;
+#[path = "../../crates/svc_client/src/audio_io.rs"]
+pub mod audio_io;
+#[path = "../../crates/svc_client/src/opus_ffi.rs"]
+pub mod opus_ffi;
+#[path = "../../crates/svc_client/src/protocol.rs"]
+pub mod protocol;
+#[path = "../../crates/svc_client/src/runtime.rs"]
+pub mod runtime;
+#[path = "../../crates/svc_client/src/session.rs"]
+pub mod session;
+
 use horizon_client::mod_api::{
     ClientPacketEvent, ClientboundPlayPacket, Hooks, Host, KeyEvent, ServerboundPlayPacket, Text, TickEvent,
 };
@@ -16,7 +29,7 @@ impl Hooks for SimpleVoiceChat {
             }
             let address = host.client_state().and_then(|state| state.server_address);
             let hint = address.as_deref().and_then(server_host);
-            if let Ok(mut state) = svc_client::runtime::state().lock() {
+            if let Ok(mut state) = runtime::state().lock() {
                 state.on_net(
                     &payload.channel,
                     &payload.data,
@@ -31,7 +44,7 @@ impl Hooks for SimpleVoiceChat {
         if host.client_state().is_none() {
             return;
         }
-        if let Ok(mut state) = svc_client::runtime::state().lock() {
+        if let Ok(mut state) = runtime::state().lock() {
             if let Some(note) = state.on_key(event.key, event.pressed) {
                 host.client_action_bar(Text::literal(format!("[voice] {note}")), true);
             }
@@ -46,15 +59,15 @@ impl Hooks for SimpleVoiceChat {
         let was_playing = IN_WORLD.swap(playing, Ordering::AcqRel);
 
         if playing && !was_playing {
-            if let Ok(mut state) = svc_client::runtime::state().lock() {
+            if let Ok(mut state) = runtime::state().lock() {
                 state.world_open();
                 let audio_notes = state.start_audio();
                 state.notes.extend(audio_notes);
-                let (channel, data) = svc_client::runtime::Glue::handshake();
+                let (channel, data) = runtime::Glue::handshake();
                 state.pending_sends.push((channel, data));
             }
         } else if !playing && was_playing {
-            if let Ok(mut state) = svc_client::runtime::state().lock() {
+            if let Ok(mut state) = runtime::state().lock() {
                 state.world_close();
             }
         }
@@ -63,14 +76,14 @@ impl Hooks for SimpleVoiceChat {
             return;
         }
 
-        let (sends, notes) = if let Ok(mut state) = svc_client::runtime::state().lock() {
+        let (sends, notes) = if let Ok(mut state) = runtime::state().lock() {
             let _ = state.on_frame(Instant::now());
             if state.reconnect_pending {
                 state.reconnect_pending = false;
                 if let Some(mut session) = state.session.take() {
                     session.close();
                 }
-                let (channel, data) = svc_client::runtime::Glue::handshake();
+                let (channel, data) = runtime::Glue::handshake();
                 state.pending_sends.push((channel, data));
             }
             (
