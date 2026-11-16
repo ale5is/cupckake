@@ -372,6 +372,18 @@ mod tests {
     }
 
     #[test]
+    fn authentication_ack_timeout_is_reported() {
+        let mut s = Session::new(1);
+        s.state = State::Connecting;
+        s.auth_started = Instant::now() - TIMEOUT_AFTER;
+        s.pump();
+        assert_eq!(
+            s.last_error(),
+            Some("no AuthenticateAck received within 15 seconds")
+        );
+    }
+
+    #[test]
     fn handshake_keep_alive_mic_and_voice() {
         let secret = [7u8; 16];
         let player = 11u128;
@@ -456,6 +468,7 @@ mod tests {
         srv.socket.send_to(&bad, srv.from.unwrap()).unwrap();
         assert!(s.pump().is_empty());
         assert_eq!(s.state(), State::Connected);
+        assert_eq!(s.last_error(), Some("UDP AES-GCM authentication failed"));
 
         // Muting silences the mic.
         s.set_muted(true);
