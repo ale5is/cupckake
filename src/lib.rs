@@ -86,6 +86,14 @@ impl Hooks for SimpleVoiceChat {
 
         let (sends, notes) = if let Ok(mut state) = svc_client::runtime::state().lock() {
             let _ = state.on_frame(Instant::now());
+            if state.reconnect_pending {
+                state.reconnect_pending = false;
+                if let Some(mut session) = state.session.take() {
+                    session.close();
+                }
+                let (channel, data) = svc_client::runtime::Glue::handshake();
+                state.pending_sends.push((channel, data));
+            }
             (
                 std::mem::take(&mut state.pending_sends),
                 std::mem::take(&mut state.notes),
