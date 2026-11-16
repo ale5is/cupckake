@@ -36,6 +36,8 @@ jobs:
         run: |
           cp -R src/svc_client /tmp/svc_client
           cargo test --manifest-path /tmp/svc_client/Cargo.toml
+      - name: Install wasm check target
+        run: rustup target add wasm32-unknown-unknown
       - name: Install Horizon Nightly mod checker
         run: cargo install --git https://github.com/horizon-rust/horizon --rev 54717b296579414add1ff4d18f7ca3ca35130bd2 --locked cargo-horizon-mod
       - name: Check native hooks against the pinned Nightly SDK
