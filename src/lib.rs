@@ -1,15 +1,22 @@
+use mod_api::{self, Hooks};
+
+#[cfg(not(target_arch = "wasm32"))]
 use mod_api::{
-    self, ClientHost, ClientPacketEvent, ClientTickPostEvent, CommandEvent, Flow, Hooks,
-    Identifier, InputKeyEvent, KeyAction, ServerboundPlayPacket, Text,
+    ClientHost, ClientPacketEvent, ClientTickPostEvent, CommandEvent, Flow, Identifier,
+    InputKeyEvent, KeyAction, ServerboundPlayPacket, Text,
 };
+#[cfg(not(target_arch = "wasm32"))]
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(not(target_arch = "wasm32"))]
 use std::time::Instant;
 
+#[cfg(not(target_arch = "wasm32"))]
 static IN_WORLD: AtomicBool = AtomicBool::new(false);
 
 #[derive(Default)]
 struct SimpleVoiceChat;
 
+#[cfg(not(target_arch = "wasm32"))]
 #[mod_api::horizon_mod]
 impl Hooks for SimpleVoiceChat {
     fn client_packet(&self, host: &mut dyn ClientHost, event: &mut ClientPacketEvent<'_>) {
@@ -116,6 +123,7 @@ impl Hooks for SimpleVoiceChat {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn send_custom_payload(
     host: &mut dyn ClientHost,
     channel: &str,
@@ -135,6 +143,7 @@ fn send_custom_payload(
     Ok(())
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn write_varint(mut value: u32, output: &mut Vec<u8>) {
     loop {
         if value & !0x7f == 0 {
@@ -146,6 +155,7 @@ fn write_varint(mut value: u32, output: &mut Vec<u8>) {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn server_host(address: &str) -> Option<String> {
     if let Ok(socket) = address.parse::<std::net::SocketAddr>() {
         return Some(socket.ip().to_string());
@@ -155,3 +165,7 @@ fn server_host(address: &str) -> Option<String> {
     let host = address.rsplit_once(':').map(|(host, _)| host).unwrap_or(address);
     if host.is_empty() { None } else { Some(host.to_string()) }
 }
+
+#[cfg(target_arch = "wasm32")]
+#[mod_api::horizon_mod]
+impl Hooks for SimpleVoiceChat {}
