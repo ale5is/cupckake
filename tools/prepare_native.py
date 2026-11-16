@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Nightly package preparation entry point.
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[1]
