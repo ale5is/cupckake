@@ -257,11 +257,14 @@ impl Glue {
 
     /// One frame: drive the session, hand back the voice events it queued.
     pub fn on_frame(&mut self, _now: Instant) -> Vec<Event> {
-        let Some(s) = &mut self.session else { return Vec::new() };
-        s.tick();
-        let events = s.pump();
-        for e in &events {
-            if let Event::Dropped(_) = e {
+        let events = if let Some(session) = &mut self.session {
+            session.tick();
+            session.pump()
+        } else {
+            Vec::new()
+        };
+        for event in &events {
+            if let Event::Dropped(_) = event {
                 self.reconnect_pending = true;
             }
         }
