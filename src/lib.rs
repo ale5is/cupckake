@@ -41,6 +41,26 @@ impl Hooks for SimpleVoiceChat {
         }
     }
 
+    fn command(&self, host: &mut dyn ClientHost, command: &str, ran: &mut bool) {
+        let command = command.trim();
+        let is_voice_command = command == "svc"
+            || command.starts_with("svc ")
+            || command == "vcgroup"
+            || command.starts_with("vcgroup ");
+        if !is_voice_command {
+            return;
+        }
+
+        if let Ok(mut state) = svc_client::runtime::state().lock() {
+            let (reply, sends) = state.on_command(command);
+            state.pending_sends.extend(sends);
+            *ran = true;
+            if !reply.is_empty() {
+                let _ = host.chat_line(Text::literal(format!("[voice] {reply}")));
+            }
+        }
+    }
+
     fn client_tick_post(&self, host: &mut dyn ClientHost) {
         let playing = host.playing();
         let was_playing = IN_WORLD.swap(playing, Ordering::AcqRel);
