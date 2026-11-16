@@ -58,7 +58,7 @@ pub fn on_player_submit(_player: &crate::game::native_mob_draw::NativeMobRender<
 pub fn on_key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     let ptt = game.native_mod_key(ID, "ptt", "key.keyboard.v");
     let mute = game.native_mod_key(ID, "mute", "key.keyboard.m");
-    let debug = game.native_mod_key(ID, "debug", "key.keyboard.f8");
+    let debug = game.native_mod_key(ID, "debug", "key.keyboard.f9");
     let mut g = locked();
     if pressed && key.eq_ignore_ascii_case(&debug) {
         g.show_debug = !g.show_debug;
@@ -96,7 +96,7 @@ pub fn on_frame(game: &mut crate::game::Game<'_>, _elapsed: std::time::Duration)
 }
 pub fn listed(mods: &mut Vec<crate::game::native_hooks::NativeMod>) {
     mods.push(crate::game::native_hooks::NativeMod { id: ID.into(), title: format!("{NAME} {VERSION}"), description: DESCRIPTION.into(), keys: vec![
-        ["ptt".into(), "Push to talk".into(), "key.keyboard.v".into()], ["mute".into(), "Mute microphone".into(), "key.keyboard.m".into()], ["debug".into(), "Toggle voice debug overlay".into(), "key.keyboard.f8".into()],
+        ["ptt".into(), "Push to talk".into(), "key.keyboard.v".into()], ["mute".into(), "Mute microphone".into(), "key.keyboard.m".into()], ["debug".into(), "Toggle voice debug overlay".into(), "key.keyboard.f9".into()],
     ] });
 }
 fn tr(key: &str) -> &'static str {
