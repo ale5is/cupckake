@@ -43,7 +43,8 @@ pub fn on_net(channel: &str, data: &[u8]) {
     let mut g = locked();
     g.on_net(channel, data, None, Instant::now());
     if channel == protocol::SECRET {
-        if let Some(session) = &mut g.session { session.set_muted(g.cfg.muted); }
+        let muted = g.cfg.muted;
+        if let Some(session) = &mut g.session { session.set_muted(muted); }
         let muted = g.cfg.muted;
         drop(g);
         queue_outbound(protocol::UPDATE_STATE.to_string(), protocol::update_state(muted));
@@ -92,7 +93,7 @@ pub fn settings_page(game: &mut crate::game::Game<'_>, mod_id: &str, buttons: &m
 pub fn settings_click(game: &mut crate::game::Game<'_>, mod_id: &str, button: usize) {
     if mod_id != ID { return; } load_preferences(game); let mut g = locked();
     match button {
-        0 => { g.cfg.muted = !g.cfg.muted; if let Some(s) = &mut g.session { s.set_muted(g.cfg.muted); } queue_outbound(protocol::UPDATE_STATE.to_string(), protocol::update_state(g.cfg.muted)); }
+        0 => { g.cfg.muted = !g.cfg.muted; let muted = g.cfg.muted; if let Some(s) = &mut g.session { s.set_muted(muted); } queue_outbound(protocol::UPDATE_STATE.to_string(), protocol::update_state(muted)); }
         1 => g.mute_all = !g.mute_all,
         2 => g.show_hud = !g.show_hud,
         n => { let rows = g.player_rows(Instant::now()); if let Some((_, uuid, _, _)) = rows.get(n - 3) { if !g.muted_players.remove(uuid) { g.muted_players.insert(*uuid); } } }
