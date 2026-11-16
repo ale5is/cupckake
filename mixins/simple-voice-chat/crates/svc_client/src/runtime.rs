@@ -128,6 +128,9 @@ impl Glue {
         let Ok(msg) = parsed else { return };
         match msg {
             proto::ServerMessage::Secret { secret, port, player, distance, voice_host, .. } => {
+                if let Some(mut previous) = self.session.take() {
+                    previous.close();
+                }
                 let host = if voice_host.is_empty() {
                     hint.unwrap_or("127.0.0.1").to_string()
                 } else {
