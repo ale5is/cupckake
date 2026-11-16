@@ -1,4 +1,4 @@
-# Trait-mod entry point for the released Horizon Nightly API 411.
+# Trait-mod entry point for the released Horizon Nightly API 411; source is compiled by native-build.
 [mod]
 id = "simple_voice_chat"
 version = "1.0.2"
