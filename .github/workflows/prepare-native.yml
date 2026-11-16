@@ -1,0 +1,37 @@
+name: Prepare Nightly native sources
+
+on:
+  push:
+    branches:
+      - pavohorizonnightly
+    paths:
+      - "tools/prepare_native.py"
+      - "mixins/simple-voice-chat/crates/svc_client/vendor/**"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  embed-opus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: pavohorizonnightly
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+      - name: Embed libopus for the native package
+        run: python tools/prepare_native.py
+      - name: Commit generated source
+        run: |
+          if git diff --quiet -- src/svc_client/opus_sources.rs; then
+            echo "Embedded Opus source is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/svc_client/opus_sources.rs
+          git commit -m "Embed libopus sources for Nightly native package"
+          git push origin HEAD:pavohorizonnightly
