@@ -1,18 +1,3 @@
-[package]
-name = "pavo-simple-voice-chat"
-version = "0.1.0"
-edition = "2024"
-publish = false
-
 [workspace]
-members = ["src/svc_client"]
+members = ["mixins/simple-voice-chat/crates/svc_client"]
 resolver = "3"
-
-[lib]
-name = "pavo_simple_voice_chat"
-path = "src/lib.rs"
-
-[dependencies]
-horizon-mod-api = { path = ".horizon/sdk/api/crates/horizon-mod-api" }
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-svc_client = { path = "src/svc_client" }
