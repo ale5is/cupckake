@@ -27,7 +27,7 @@ impl Hooks for SimpleVoiceChat {
         let hint = address.as_deref().and_then(server_host);
 
         if let Ok(mut state) = svc_client::runtime::state().lock() {
-            state.on_net(&payload.channel, &payload.data, hint, Instant::now());
+            state.on_net(&payload.channel, &payload.data, hint.as_deref(), Instant::now());
         }
     }
 
@@ -50,7 +50,8 @@ impl Hooks for SimpleVoiceChat {
                 state.world_open();
                 let (channel, data) = svc_client::runtime::Glue::handshake();
                 state.pending_sends.push((channel, data));
-                state.notes.extend(state.start_audio());
+                let audio_notes = state.start_audio();
+                state.notes.extend(audio_notes);
             }
         } else if !playing && was_playing {
             if let Ok(mut state) = svc_client::runtime::state().lock() {
@@ -91,7 +92,7 @@ fn send_custom_payload(
     channel: &str,
     data: &[u8],
 ) -> Result<(), String> {
-    let channel_id = Identifier::parse(channel).map_err(|error| format!("{error:?}"))?;
+    let _ = Identifier::parse(channel).map_err(|error| format!("{error:?}"))?;
     let mut body = Vec::with_capacity(channel.len() + data.len() + 5);
     write_varint(channel.len() as u32, &mut body);
     body.extend_from_slice(channel.as_bytes());
@@ -102,7 +103,6 @@ fn send_custom_payload(
         body,
     );
     host.send_packet(packet).map_err(|error| format!("{error:?}"))?;
-    let _ = channel_id;
     Ok(())
 }
 
@@ -117,12 +117,12 @@ fn write_varint(mut value: u32, output: &mut Vec<u8>) {
     }
 }
 
-fn server_host(address: &str) -> Option<&str> {
+fn server_host(address: &str) -> Option<String> {
     if let Ok(socket) = address.parse::<std::net::SocketAddr>() {
-        return Some(Box::leak(socket.ip().to_string().into_boxed_str()));
+        return Some(socket.ip().to_string());
     }
     let address = address.strip_prefix('[').unwrap_or(address);
     let address = address.split(']').next().unwrap_or(address);
     let host = address.rsplit_once(':').map(|(host, _)| host).unwrap_or(address);
-    if host.is_empty() { None } else { Some(Box::leak(host.to_string().into_boxed_str())) }
+    if host.is_empty() { None } else { Some(host.to_string()) }
 }
