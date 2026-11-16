@@ -6,11 +6,10 @@ This repository produces a native Horizon mod package (.hnmod). Install the pack
 
 ## Download and install
 
-1. Download the `simple-voice-chat-hnmod` artifact from the [successful GitHub Actions run](https://github.com/ale5is/cupckake/releases/tag/simple-voice-chat-v1.0.4).
-2. Extract `simple_voice_chat-1.0.4.hnmod` from the downloaded artifact ZIP.
-3. Import/install that `.hnmod` through Horizon's native Mods interface for the desired instance.
-4. Accept Horizon's native-code trust warning.
-5. Build the instance from Horizon's Mods page.
+1. Download `simple_voice_chat-1.0.4.hnmod` from the [1.0.4 GitHub Release](https://github.com/ale5is/cupckake/releases/tag/simple-voice-chat-v1.0.4).
+2. Import/install the `.hnmod` through Horizon's native Mods interface for the desired instance.
+3. Accept Horizon's native-code trust warning.
+4. Build the instance from Horizon's Mods page.
 
 Native mods execute with the player's account permissions. Review the source before installing.
 
@@ -20,7 +19,7 @@ Requires Python 3.11 or newer.
 
     python tools/package.py
 
-The output is `target/simple_voice_chat-1.0.1.hnmod`. The packager includes the mixin helpers, the complete `svc_client` Rust crate, Opus sources encoded into `opus_sources.rs` (to comply with the .hnmod source-file allowlist), data folders, license notice and matching native metadata. It verifies the resulting archive and prints its SHA-256.
+The output is `target/simple_voice_chat-1.0.4.hnmod`. The packager includes the mixin helpers, the complete `svc_client` Rust crate, Opus sources encoded into `opus_sources.rs` (to comply with the .hnmod source-file allowlist), data folders, license notice and matching native metadata. It verifies the resulting archive and prints its SHA-256.
 
 ## Compatibility
 
