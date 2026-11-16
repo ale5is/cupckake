@@ -115,6 +115,7 @@ fn tr(key: &str) -> &'static str {
         "hud" => if es { "HUD de voz" } else if pt { "HUD de voz" } else if fr { "HUD vocal" } else if de { "Sprach-HUD" } else if it { "HUD vocale" } else if ru { "Голосовой HUD" } else if zh { "语音 HUD" } else if ja { "ボイスHUD" } else { "Voice HUD" },
         "debug" => if es { "Diagnóstico de conexión" } else if pt { "Diagnóstico da conexão" } else if fr { "Diagnostic de connexion" } else if de { "Verbindungsdiagnose" } else if it { "Diagnostica connessione" } else if ru { "Диагностика соединения" } else if zh { "连接诊断" } else if ja { "接続診断" } else { "Connection debug" },
         "position" => if es { "Posición del HUD" } else if pt { "Posição do HUD" } else if fr { "Position du HUD" } else if de { "HUD-Position" } else if it { "Posizione HUD" } else if ru { "Положение HUD" } else if zh { "HUD位置" } else if ja { "HUDの位置" } else { "HUD position" },
+        "audible" => if es { "SE OYE" } else if pt { "AUDÍVEL" } else if fr { "AUDIBLE" } else if de { "HÖRBAR" } else if it { "UDIBILE" } else if ru { "СЛЫШНО" } else if zh { "可听见" } else if ja { "聞こえる" } else { "AUDIBLE" },
         "players" => if es { "Jugadores (clic para silenciar)" } else if pt { "Jogadores (clique para silenciar)" } else if fr { "Joueurs (cliquer pour couper)" } else if de { "Spieler (zum Stummschalten klicken)" } else if it { "Giocatori (clicca per silenziare)" } else if ru { "Игроки (нажмите, чтобы заглушить)" } else if zh { "玩家（点击静音）" } else if ja { "プレイヤー（クリックでミュート）" } else { "Players (click to mute)" },
         "no_players" => if es { "No hay jugadores de voz detectados" } else if pt { "Nenhum jogador de voz detectado" } else if fr { "Aucun joueur vocal détecté" } else if de { "Keine Sprachspieler erkannt" } else if it { "Nessun giocatore vocale rilevato" } else if ru { "Голосовые игроки не обнаружены" } else if zh { "未检测到语音玩家" } else if ja { "ボイスプレイヤーが見つかりません" } else { "No voice players detected" },
         "cannot_block" => if es { "Bloquear mi voz por jugador requiere soporte del servidor" } else if pt { "Bloquear minha voz por jogador exige suporte do servidor" } else if fr { "Bloquer ma voix par joueur nécessite le serveur" } else if de { "Mein Mikrofon pro Spieler blockieren erfordert Serverunterstützung" } else if it { "Bloccare la mia voce per giocatore richiede il server" } else if ru { "Блокировка моего голоса для игрока требует поддержки сервера" } else if zh { "按玩家屏蔽我的语音需要服务器支持" } else if ja { "プレイヤー別の送信ミュートにはサーバー対応が必要です" } else { "Per-player outgoing mute requires server support" },
@@ -149,6 +150,17 @@ fn tr(key: &str) -> &'static str {
     }
 }
 
+fn connection_label(g: &Glue) -> &'static str {
+    match g.session.as_ref().map(|session| session.state()) {
+        None if g.connection_requested => tr("connecting"),
+        None => tr("disconnected"),
+        Some(svc_client::session::State::Idle) if g.reconnect_pending => tr("reconnecting"),
+        Some(svc_client::session::State::Idle) => tr("disconnected"),
+        Some(svc_client::session::State::RequestingSecret) | Some(svc_client::session::State::Connecting) => tr("connecting"),
+        Some(svc_client::session::State::Connected) => tr("connected"),
+    }
+}
+
 fn key_label(key: &str) -> String {
     let value = key.strip_prefix("key.keyboard.").unwrap_or(key);
     let value = value.strip_prefix("Key").unwrap_or(value);
@@ -178,7 +190,7 @@ pub fn settings_page(game: &mut crate::game::Game<'_>, mod_id: &str, buttons: &m
     buttons.push(tr("players").into());
     let rows = g.player_rows(Instant::now());
     for (name, _, muted, _) in &rows {
-        buttons.push(format!("{}: {}", name, if *muted { tr("muted") } else { tr("ready") }));
+        buttons.push(format!("{}: {}", name, if *muted { tr("muted") } else { tr("audible") }));
     }
     if rows.is_empty() { buttons.push(tr("no_players").into()); }
     buttons.push(tr("cannot_block").into());
@@ -214,7 +226,7 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
     if !game.native_corner_shown(corner) { return; }
     let mut lines = Vec::new();
     if g.show_hud {
-        lines.push(format!("{}: {}", tr("voice"), g.connection_label()));
+        lines.push(format!("{}: {}", tr("voice"), connection_label(&g)));
         lines.push(format!("{}: {}", tr("microphone"), if g.cfg.muted { tr("muted") } else { tr("ready") }));
         if g.ptt_held && !g.cfg.muted { lines.push(tr("transmitting").into()); }
         else if !g.cfg.muted { lines.push(format!("{} [{}] {}", tr("press"), key_label(&ptt), tr("to_talk"))); }
