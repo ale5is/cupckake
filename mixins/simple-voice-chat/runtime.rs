@@ -12,10 +12,23 @@ static NET_ERROR: Mutex<Option<String>> = Mutex::new(None);
 fn locked() -> std::sync::MutexGuard<'static, Glue> { state().lock().unwrap_or_else(|e| e.into_inner()) }
 pub fn queue_outbound(channel: String, body: Vec<u8>) { OUT.lock().unwrap_or_else(|e| e.into_inner()).push((channel, body)); }
 pub fn drain_outbound() -> Vec<(String, Vec<u8>)> { std::mem::take(&mut *OUT.lock().unwrap_or_else(|e| e.into_inner())) }
-pub fn on_net_send_result(result: Result<(), String>) {
-    if let Err(message) = result {
-        let mut error = NET_ERROR.lock().unwrap_or_else(|e| e.into_inner());
-        *error = Some(message);
+pub fn on_net_send_result(channel: &str, result: Result<(), String>) {
+    match result {
+        Ok(()) if channel == protocol::REQUEST_SECRET => {
+            *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+            let mut g = locked();
+            g.connection_stage = "voicechat:request_secret enviado; esperando SECRET".into();
+            g.connection_error = None;
+        }
+        Err(message) => {
+            *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(message.clone());
+            if channel == protocol::REQUEST_SECRET {
+                let mut g = locked();
+                g.connection_stage = "Falló el envío de voicechat:request_secret".into();
+                g.connection_error = Some(format!("Mod channel: {message}"));
+            }
+        }
+        _ => {}
     }
 }
 fn parse_muted_players(value: Option<String>) -> std::collections::HashSet<u128> {
@@ -53,12 +66,11 @@ pub fn world_lifecycle(game: &mut crate::game::Game<'_>, phase: &crate::game::na
 }
 pub fn on_net(channel: &str, data: &[u8]) {
     let mut g = locked();
-    g.on_net(channel, data, None, Instant::now());
-    if channel == protocol::SECRET {
+    let secret_processed = g.on_net(channel, data, None, Instant::now());
+    if channel == protocol::SECRET && secret_processed {
         *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let muted = g.cfg.muted;
         if let Some(session) = &mut g.session { session.set_muted(muted); }
-        let muted = g.cfg.muted;
         drop(g);
         queue_outbound(protocol::UPDATE_STATE.to_string(), protocol::update_state(muted));
     }
@@ -272,6 +284,7 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
             Some(svc_client::session::State::Connected) => tr("authenticated"),
         };
         lines.push(format!("{}: {}", tr("udp"), udp));
+        lines.push(format!("Etapa: {}", g.connection_stage));
         lines.push(format!("{}: {}", tr("server"), g.server_addr.map(|addr| addr.to_string()).unwrap_or_else(|| "—".into())));
         if let Some(error) = &g.connection_error {
             lines.push(format!("Error UDP: {error}"));
