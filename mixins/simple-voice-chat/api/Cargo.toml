@@ -1,0 +1,9 @@
+[package]
+name = "mod-simple_voice_chat"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+horizon-client = { git = "https://github.com/horizon-rust/horizon", rev = "9f42064c11efe7ef3e5ed2baad7ddc2a3b36eea0" }
+svc_client = { path = "../crates/svc_client" }
