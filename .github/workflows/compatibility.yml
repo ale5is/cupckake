@@ -42,11 +42,12 @@ jobs:
         run: |
           python - <<'PY'
           import json
+          import os
           from pathlib import Path
           metadata = json.loads(Path("compatibility.json").read_text())
-          print(f"horizon_revision={metadata['horizon_revision']}")
+          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
+              output.write(f"horizon_revision={metadata['horizon_revision']}\\n")
           PY
-          python -c "import json; print('horizon_revision=' + json.load(open('compatibility.json'))['horizon_revision')" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           repository: horizon-rust/horizon
