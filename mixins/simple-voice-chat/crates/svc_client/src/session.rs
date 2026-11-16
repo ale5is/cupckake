@@ -55,6 +55,7 @@ pub struct Session {
     last_keep_alive: Instant,
     last_ping: Instant,
     last_seen: Instant,
+    auth_started: Instant,
     events: Vec<Event>,
     last_error: Option<String>,
 }
@@ -79,6 +80,7 @@ impl Session {
             last_keep_alive: Instant::now(),
             last_ping: Instant::now(),
             last_seen: Instant::now(),
+            auth_started: Instant::now(),
             events: Vec::new(),
             last_error: None,
         }
@@ -129,7 +131,8 @@ impl Session {
             secret,
         })?;
         self.state = State::Connecting;
-        self.last_seen = Instant::now();
+        self.auth_started = Instant::now();
+        self.last_seen = self.auth_started;
         Ok(())
     }
 
@@ -214,6 +217,12 @@ impl Session {
         }
         for d in &datagrams {
             self.ingest(d);
+        }
+        if self.state == State::Connecting
+            && self.auth_started.elapsed() >= TIMEOUT_AFTER
+            && self.last_error.is_none()
+        {
+            self.last_error = Some("no AuthenticateAck received within 15 seconds".into());
         }
         if self.state == State::Connected && self.last_seen.elapsed() >= TIMEOUT_AFTER {
             self.state = State::Idle;
