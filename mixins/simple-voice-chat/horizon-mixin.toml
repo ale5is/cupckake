@@ -47,17 +47,6 @@ bindings = [
 ]
 
 [[injection]]
-id = "input_key"
-kind = "HEAD"
-hook = "input_key"
-hook_version = 1
-helper = "input.rs"
-bindings = [
-  { name = "event", ty = "&winit::event::KeyEvent", value = "event" },
-  { name = "modifiers", ty = "u32", value = "modifiers" },
-]
-
-[[injection]]
 id = "command_handle"
 kind = "HEAD"
 hook = "command"

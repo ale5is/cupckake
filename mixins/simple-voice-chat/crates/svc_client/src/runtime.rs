@@ -5,7 +5,7 @@
 //! testable is here and unit-tested. Not a copy of Matdoesteching's Simple
 //! Voice Chat: it implements the same documented wire protocol.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::{Mutex, OnceLock};
 use std::time::Instant;
@@ -43,6 +43,10 @@ pub struct Glue {
     pub group_id: Option<u128>,
     pub group_name: Option<String>,
     pub server_addr: Option<SocketAddr>,
+    pub mute_all: bool,
+    pub muted_players: HashSet<u128>,
+    pub show_hud: bool,
+    pub speaking_until: HashMap<u128, Instant>,
     /// Lines for the chat box: group joins, players entering or leaving voice.
     pub notes: Vec<String>,
     /// Set when the UDP connection dropped; the frame helper re-handshakes.
@@ -68,6 +72,10 @@ impl Default for Glue {
             group_id: None,
             group_name: None,
             server_addr: None,
+            mute_all: false,
+            muted_players: HashSet::new(),
+            show_hud: true,
+            speaking_until: HashMap::new(),
             notes: Vec::new(),
             reconnect_pending: false,
             pending_sends: Vec::new(),
@@ -241,7 +249,8 @@ impl Glue {
     fn pump_speaker(&mut self, events: &[crate::session::Event]) {
         let Some(spk) = &self.speaker else { return };
         for e in events {
-            if let crate::session::Event::Voice { data, volume, .. } = e {
+            if let crate::session::Event::Voice { sender, data, volume, .. } = e {
+                if self.mute_all || self.muted_players.contains(sender) { continue; }
                 let Some(mut pcm) = self
                     .codec
                     .as_mut()
@@ -256,7 +265,7 @@ impl Glue {
     }
 
     /// One frame: drive the session, hand back the voice events it queued.
-    pub fn on_frame(&mut self, _now: Instant) -> Vec<Event> {
+    pub fn on_frame(&mut self, now: Instant) -> Vec<Event> {
         let Some(s) = &mut self.session else { return Vec::new() };
         s.tick();
         let events = s.pump();
@@ -265,26 +274,42 @@ impl Glue {
                 self.reconnect_pending = true;
             }
         }
+        for event in &events {
+            if let Event::Voice { sender, .. } = event {
+                self.speaking_until.insert(*sender, now + std::time::Duration::from_millis(800));
+            }
+        }
+        self.speaking_until.retain(|_, until| *until > now);
         self.pump_speaker(&events);
         self.pump_mic();
         events
     }
 
     /// A key event: PTT on press and release, mute on the mute key.
-    pub fn on_key(&mut self, code: &str, pressed: bool) -> Option<String> {
-        if code.eq_ignore_ascii_case(&self.cfg.ptt_key) {
-            self.ptt_held = pressed;
-            return None;
-        }
-        if pressed && code.eq_ignore_ascii_case("KeyM") {
+    pub fn on_key(&mut self, code: &str, pressed: bool, ptt_key: &str, mute_key: &str) -> Option<String> {
+        if code.eq_ignore_ascii_case(ptt_key) { self.ptt_held = pressed; return None; }
+        if pressed && code.eq_ignore_ascii_case(mute_key) {
             self.cfg.muted = !self.cfg.muted;
-            return Some(if self.cfg.muted {
-                "voice muted".into()
-            } else {
-                "voice unmuted".into()
-            });
+            if let Some(session) = &mut self.session { session.set_muted(self.cfg.muted); }
+            return Some(if self.cfg.muted { "voice muted".into() } else { "voice unmuted".into() });
         }
         None
+    }
+
+    pub fn connection_label(&self) -> &'static str {
+        match self.session.as_ref().map(|s| s.state()) {
+            None | Some(crate::session::State::Idle) => "DESCONECTADO",
+            Some(crate::session::State::RequestingSecret) | Some(crate::session::State::Connecting) => "CONECTANDO",
+            Some(crate::session::State::Connected) => "CONECTADO",
+        }
+    }
+
+    pub fn player_rows(&self, now: Instant) -> Vec<(String, u128, bool, bool)> {
+        let mut rows: Vec<_> = self.uuid_by_name.iter().map(|(name, uuid)|
+            (name.clone(), *uuid, self.muted_players.contains(uuid), self.speaking_until.get(uuid).is_some_and(|until| *until > now))
+        ).collect();
+        rows.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        rows
     }
 
     /// `/svc` and `/vcgroup`: returns the chat reply and any packets to send.
@@ -303,10 +328,14 @@ impl Glue {
         match sub {
             "mute" => {
                 self.cfg.muted = true;
+                if let Some(session) = &mut self.session { session.set_muted(true); }
+                sends.push((proto::UPDATE_STATE.to_string(), proto::update_state(true)));
                 ("voice muted".into(), sends)
             }
             "unmute" => {
                 self.cfg.muted = false;
+                if let Some(session) = &mut self.session { session.set_muted(false); }
+                sends.push((proto::UPDATE_STATE.to_string(), proto::update_state(false)));
                 ("voice unmuted".into(), sends)
             }
             "ptt" => {
