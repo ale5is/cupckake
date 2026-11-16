@@ -1,12 +1,12 @@
-[workspace]
-members = [".", "mixins/simple-voice-chat/crates/svc_client"]
-resolver = "3"
-
 [package]
 name = "pavo-simple-voice-chat"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
 publish = false
+
+[workspace]
+members = ["mixins/simple-voice-chat/crates/svc_client"]
+resolver = "3"
 
 [lib]
 name = "pavo_simple_voice_chat"
