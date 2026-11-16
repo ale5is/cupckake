@@ -36,6 +36,21 @@ jobs:
         run: |
           cp -R src/svc_client /tmp/svc_client
           cargo test --manifest-path /tmp/svc_client/Cargo.toml
+      - name: Set up Android NDK
+        uses: android-actions/setup-android@v3
+      - name: Install Android NDK toolchain
+        run: |
+          yes | sdkmanager --licenses
+          sdkmanager "ndk;27.2.12479018"
+          rustup target add aarch64-linux-android
+      - name: Cross-check SVC and Opus for Android ARM64
+        run: |
+          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
+          export TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          export CC_aarch64_linux_android="$TOOLCHAIN/aarch64-linux-android26-clang"
+          export AR_aarch64_linux_android="$TOOLCHAIN/llvm-ar"
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android26-clang"
+          cargo check --manifest-path /tmp/svc_client/Cargo.toml --target aarch64-linux-android
       - name: Install wasm check target
         run: rustup target add wasm32-unknown-unknown
       - name: Install Horizon Nightly mod checker
