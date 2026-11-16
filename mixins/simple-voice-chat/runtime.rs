@@ -96,7 +96,7 @@ pub fn on_frame(game: &mut crate::game::Game<'_>, _elapsed: std::time::Duration)
 }
 pub fn listed(mods: &mut Vec<crate::game::native_hooks::NativeMod>) {
     mods.push(crate::game::native_hooks::NativeMod { id: ID.into(), title: format!("{NAME} {VERSION}"), description: DESCRIPTION.into(), keys: vec![
-        ["ptt".into(), "Push to talk".into(), "key.keyboard.v".into()], ["mute".into(), "Mute microphone".into(), "key.keyboard.m".into()], ["debug".into(), "Toggle voice debug overlay".into(), "key.keyboard.f9".into()],
+        ["ptt".into(), tr("push_to_talk").into(), "key.keyboard.v".into()], ["mute".into(), tr("mute_mic").into(), "key.keyboard.m".into()], ["debug".into(), tr("debug").into(), "key.keyboard.f9".into()],
     ] });
 }
 fn tr(key: &str) -> &'static str {
@@ -110,6 +110,8 @@ fn tr(key: &str) -> &'static str {
     let zh = code.starts_with("zh");
     let ja = code.starts_with("ja");
     match key {
+        "push_to_talk" => if es { "Pulsar para hablar" } else if pt { "Pressionar para falar" } else if fr { "Appuyer pour parler" } else if de { "Zum Sprechen drücken" } else if it { "Premi per parlare" } else if ru { "Нажать, чтобы говорить" } else if zh { "按键说话" } else if ja { "押して話す" } else { "Push to talk" },
+        "mute_mic" => if es { "Silenciar micrófono" } else if pt { "Silenciar microfone" } else if fr { "Couper le micro" } else if de { "Mikrofon stummschalten" } else if it { "Silenzia microfono" } else if ru { "Отключить микрофон" } else if zh { "静音麦克风" } else if ja { "マイクをミュート" } else { "Mute microphone" },
         "microphone" => if es { "Micrófono" } else if pt { "Microfone" } else if fr { "Micro" } else if de { "Mikrofon" } else if it { "Microfono" } else if ru { "Микрофон" } else if zh { "麦克风" } else if ja { "マイク" } else { "Microphone" },
         "mute_all" => if es { "Silenciar a todos" } else if pt { "Silenciar todos" } else if fr { "Couper tous les joueurs" } else if de { "Alle stummschalten" } else if it { "Silenzia tutti" } else if ru { "Отключить всех" } else if zh { "静音所有玩家" } else if ja { "全員をミュート" } else { "Mute everyone" },
         "hud" => if es { "HUD de voz" } else if pt { "HUD de voz" } else if fr { "HUD vocal" } else if de { "Sprach-HUD" } else if it { "HUD vocale" } else if ru { "Голосовой HUD" } else if zh { "语音 HUD" } else if ja { "ボイスHUD" } else { "Voice HUD" },
