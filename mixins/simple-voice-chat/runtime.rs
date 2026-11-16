@@ -5,7 +5,7 @@ pub use svc_client::runtime::{state, Glue};
 
 pub const ID: &str = "simple_voice_chat";
 pub const NAME: &str = "Simple Voice Chat";
-pub const VERSION: &str = "1.0.3";
+pub const VERSION: &str = "1.0.4";
 pub const DESCRIPTION: &str = "Proximity voice chat, push-to-talk, player mute controls and a live voice HUD.";
 static OUT: Mutex<Vec<(String, Vec<u8>)>> = Mutex::new(Vec::new());
 fn locked() -> std::sync::MutexGuard<'static, Glue> { state().lock().unwrap_or_else(|e| e.into_inner()) }
@@ -236,7 +236,7 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
         }
     }
     if g.show_debug {
-        lines.push(format!("{} — {}", tr("debug"), g.connection_label()));
+        lines.push(format!("{} — {}", tr("debug"), connection_label(&g)));
         let udp = match g.session.as_ref().map(|session| session.state()) {
             None if g.connection_requested => tr("waiting_secret"),
             None => tr("no_session"),
@@ -256,17 +256,5 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
     let height = lines.len() as f32 * 10.0 + 6.0;
     let (x, y) = corners.place(corner, width, height);
     game.native_fill(batch, [x, y, width, height], 0x78000000);
-    for (i, line) in lines.iter().enumerate() { game.native_text(batch, line, [x + 4.0, y + 3.0 + i as f32 * 10.0], 0xFFFFFF, true); }
-}
-
-pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hud::HudBatch, corners: &mut horizon_client::extras_hud::Corners) {
-    use horizon_client::extras::Corner;
-    if !game.native_on(ID) || !game.native_corner_shown(Corner::TopRight) { return; }
-    let g = locked(); if !g.show_hud { return; }
-    let mut lines = vec![format!("Voice: {}", g.connection_label()), if g.cfg.muted { "Microphone: MUTED".into() } else { "Microphone: READY".into() }];
-    if g.ptt_held && !g.cfg.muted { lines.push("TRANSMITTING".into()); } if g.mute_all { lines.push("All players muted".into()); }
-    for (name, _, _, speaking) in g.player_rows(Instant::now()) { if speaking { lines.push(format!("Speaking: {name}")); } }
-    drop(g); let width = lines.iter().map(|line| game.native_text_width(line)).fold(0.0, f32::max) + 8.0; let height = lines.len() as f32 * 10.0 + 6.0;
-    let (x, y) = corners.place(Corner::TopRight, width, height); game.native_fill(batch, [x, y, width, height], 0x78000000);
     for (i, line) in lines.iter().enumerate() { game.native_text(batch, line, [x + 4.0, y + 3.0 + i as f32 * 10.0], 0xFFFFFF, true); }
 }
