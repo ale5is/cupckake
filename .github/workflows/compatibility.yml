@@ -102,3 +102,20 @@ jobs:
             --out target/simple-voice-chat-horizon \
             --trust-native-mods \
             --package horizon-client
+      - name: Set up Python for native package
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Package .hnmod
+        run: python cupckake/tools/package.py
+      - name: Install Horizon native mod validator
+        run: cargo install --locked --git https://github.com/horizon-rust/horizon --rev ${{ steps.compatibility.outputs.horizon_revision }} cargo-horizon-mod
+      - name: Validate .hnmod package
+        run: cargo horizon-mod check cupckake/target/simple_voice_chat-1.0.4.hnmod
+      - name: Upload validated .hnmod artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: simple-voice-chat-hnmod-pr
+          path: cupckake/target/simple_voice_chat-1.0.4.hnmod
+          if-no-files-found: error
+          retention-days: 14
