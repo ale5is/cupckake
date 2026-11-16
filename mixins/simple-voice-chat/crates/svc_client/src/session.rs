@@ -56,6 +56,7 @@ pub struct Session {
     last_ping: Instant,
     last_seen: Instant,
     events: Vec<Event>,
+    last_error: Option<String>,
 }
 
 impl Session {
@@ -79,11 +80,15 @@ impl Session {
             last_ping: Instant::now(),
             last_seen: Instant::now(),
             events: Vec::new(),
+            last_error: None,
         }
     }
 
     pub fn state(&self) -> State {
         self.state
+    }
+    pub fn last_error(&self) -> Option<&str> {
+        self.last_error.as_deref()
     }
     pub fn muted(&self) -> bool {
         self.muted
@@ -135,6 +140,7 @@ impl Session {
         self.server = None;
         self.state = State::Idle;
         self.events.clear();
+        self.last_error = None;
     }
 
     fn send(&mut self, packet: &ToServer) -> std::io::Result<()> {
@@ -193,8 +199,16 @@ impl Session {
             let mut buf = [0u8; 4096];
             loop {
                 match socket.recv_from(&mut buf) {
-                    Ok((n, _)) => datagrams.push(buf[..n].to_vec()),
-                    Err(_) => break,
+                    Ok((n, from)) => {
+                        if Some(from) == self.server {
+                            datagrams.push(buf[..n].to_vec());
+                        }
+                    }
+                    Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
+                    Err(error) => {
+                        self.last_error = Some(format!("UDP recv_from: {error}"));
+                        break;
+                    }
                 }
             }
         }
@@ -210,20 +224,33 @@ impl Session {
 
     fn ingest(&mut self, datagram: &[u8]) {
         let plain = {
-            let Some(cipher) = self.cipher.as_ref() else { return };
+            let Some(cipher) = self.cipher.as_ref() else {
+                self.last_error = Some("UDP cipher is not initialized".into());
+                return;
+            };
             let sealed = match server_datagram(datagram) {
                 Ok(s) => s,
-                Err(_) => return,
+                Err(_) => {
+                    self.last_error = Some("invalid UDP datagram header or length".into());
+                    return;
+                }
             };
             match cipher.open(sealed) {
                 Some(p) => p,
-                None => return,
+                None => {
+                    self.last_error = Some("UDP AES-GCM authentication failed".into());
+                    return;
+                }
             }
         };
         let packet = match FromServer::read(&plain) {
             Ok(p) => p,
-            Err(_) => return,
+            Err(_) => {
+                self.last_error = Some("unknown or malformed Simple Voice Chat UDP packet".into());
+                return;
+            }
         };
+        self.last_error = None;
         self.last_seen = Instant::now();
         match packet {
             FromServer::AuthenticateAck => {
