@@ -1,4 +1,4 @@
-name: Prepare Nightly native sources
+name: Validate Simple Voice Chat Nightly native mod
 
 on:
   push:
@@ -6,67 +6,32 @@ on:
       - pavohorizonnightly
     paths:
       - ".github/workflows/prepare-native.yml"
-      - "tools/prepare_native.py"
-      - "mixins/simple-voice-chat/crates/svc_client/vendor/**"
-      - "src/svc_client/**"
-      - "src/lib.rs"
-      - "Cargo.toml"
+      - "compatibility.json"
+      - "mixins/simple-voice-chat/**"
+      - "tools/package.py"
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  embed-opus:
+  validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: pavohorizonnightly
       - uses: actions/setup-python@v5
         with:
           python-version: "3.x"
-      - name: Embed libopus for the native package
-        run: python tools/prepare_native.py
-      - name: Set up Rust
-        uses: dtolnay/rust-toolchain@stable
-      - name: Install Linux audio headers
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev
-      - name: Test SVC protocol, session and Opus build
+      - name: Build and verify the .hnmod package
+        run: python tools/package.py
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install native build prerequisites
         run: |
-          cp -R src/svc_client /tmp/svc_client
-          cargo test --manifest-path /tmp/svc_client/Cargo.toml
-      - name: Set up Android NDK
-        uses: android-actions/setup-android@v3
-      - name: Install Android NDK toolchain
-        run: |
-          yes | sdkmanager --licenses
-          sdkmanager "ndk;27.2.12479018"
-          rustup target add aarch64-linux-android
-      - name: Cross-check SVC and Opus for Android ARM64
-        run: |
-          export ANDROID_NDK_HOME="$ANDROID_HOME/ndk/27.2.12479018"
-          export TOOLCHAIN="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          export CC_aarch64_linux_android="$TOOLCHAIN/aarch64-linux-android26-clang"
-          export AR_aarch64_linux_android="$TOOLCHAIN/llvm-ar"
-          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER="$TOOLCHAIN/aarch64-linux-android26-clang"
-          cargo check --manifest-path /tmp/svc_client/Cargo.toml --target aarch64-linux-android
-      - name: Install wasm check target
-        run: rustup target add wasm32-unknown-unknown
-      - name: Install Horizon Nightly mod checker
-        run: cargo install --git https://github.com/horizon-rust/horizon --rev 54717b296579414add1ff4d18f7ca3ca35130bd2 --locked cargo-horizon-mod
-      - name: Check native hooks against the pinned Nightly SDK
-        run: cargo horizon-mod check
-      - name: Commit generated source
-        run: |
-          git fetch origin pavohorizonnightly
-          git rebase origin/pavohorizonnightly
-          git add -f src/svc_client/opus_sources.rs Cargo.lock
-          if git diff --cached --quiet; then
-            echo "Embedded Opus source is already current."
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Embed libopus sources for Nightly native package"
-          git push origin HEAD:pavohorizonnightly
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libudev-dev libxkbcommon-dev libwayland-dev libx11-dev libxkbcommon-x11-dev libvulkan-dev
+      - name: Test SVC protocol, audio and Opus runtime
+        run: cargo test --manifest-path mixins/simple-voice-chat/crates/svc_client/Cargo.toml
+      - name: Compile the Nightly Hooks API crate
+        run: cargo check --manifest-path mixins/simple-voice-chat/api/Cargo.toml
+      - uses: actions/upload-artifact@v4
+        with:
+          name: simple-voice-chat-hnmod
+          path: target/simple_voice_chat-1.0.2.hnmod
+          if-no-files-found: error
