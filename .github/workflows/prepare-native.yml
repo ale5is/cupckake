@@ -36,11 +36,15 @@ jobs:
         run: |
           cp -R src/svc_client /tmp/svc_client
           cargo test --manifest-path /tmp/svc_client/Cargo.toml
+      - name: Install Horizon Nightly mod checker
+        run: cargo install --git https://github.com/horizon-rust/horizon --rev 54717b296579414add1ff4d18f7ca3ca35130bd2 --locked cargo-horizon-mod
+      - name: Check native hooks against the pinned Nightly SDK
+        run: cargo horizon-mod check
       - name: Commit generated source
         run: |
           git fetch origin pavohorizonnightly
           git rebase origin/pavohorizonnightly
-          git add -f src/svc_client/opus_sources.rs
+          git add -f src/svc_client/opus_sources.rs Cargo.lock
           if git diff --cached --quiet; then
             echo "Embedded Opus source is already current."
             exit 0
