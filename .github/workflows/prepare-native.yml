@@ -27,7 +27,7 @@ jobs:
         run: python tools/prepare_native.py
       - name: Commit generated source
         run: |
-          if git diff --quiet -- src/svc_client/opus_sources.rs; then
+          if [ -z "$(git status --porcelain -- src/svc_client/opus_sources.rs)" ]; then
             echo "Embedded Opus source is already current."
             exit 0
           fi
