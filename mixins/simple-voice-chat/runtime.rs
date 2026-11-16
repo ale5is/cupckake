@@ -8,9 +8,14 @@ pub const NAME: &str = "Simple Voice Chat";
 pub const VERSION: &str = "1.0.4";
 pub const DESCRIPTION: &str = "Proximity voice chat, push-to-talk, player mute controls and a live voice HUD.";
 static OUT: Mutex<Vec<(String, Vec<u8>)>> = Mutex::new(Vec::new());
+static NET_ERROR: Mutex<Option<String>> = Mutex::new(None);
 fn locked() -> std::sync::MutexGuard<'static, Glue> { state().lock().unwrap_or_else(|e| e.into_inner()) }
 pub fn queue_outbound(channel: String, body: Vec<u8>) { OUT.lock().unwrap_or_else(|e| e.into_inner()).push((channel, body)); }
 pub fn drain_outbound() -> Vec<(String, Vec<u8>)> { std::mem::take(&mut *OUT.lock().unwrap_or_else(|e| e.into_inner())) }
+pub fn on_net_send_result(result: Result<(), String>) {
+    let mut error = NET_ERROR.lock().unwrap_or_else(|e| e.into_inner());
+    *error = result.err();
+}
 fn parse_muted_players(value: Option<String>) -> std::collections::HashSet<u128> {
     value.unwrap_or_default().split(',').filter_map(|v| v.trim().parse().ok()).collect()
 }
@@ -34,6 +39,7 @@ pub fn load_preferences(game: &crate::game::Game<'_>) {
     if let Some(session) = &mut g.session { session.set_muted(muted); }
 }
 pub fn world_open_ready(game: &mut crate::game::Game<'_>) {
+    *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
     load_preferences(game); let mut g = locked(); g.world_open();
     let (channel, body) = Glue::handshake(); queue_outbound(channel, body);
     let notes = g.start_audio(); g.notes.extend(notes);
@@ -47,6 +53,7 @@ pub fn on_net(channel: &str, data: &[u8]) {
     let mut g = locked();
     g.on_net(channel, data, None, Instant::now());
     if channel == protocol::SECRET {
+        *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let muted = g.cfg.muted;
         if let Some(session) = &mut g.session { session.set_muted(muted); }
         let muted = g.cfg.muted;
@@ -267,6 +274,12 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
         lines.push(format!("{}: {}", tr("mic_input"), if g.mic.is_some() { tr("ready") } else { tr("off") }));
         lines.push(format!("{}: {}", tr("audio_output"), if g.speaker.is_some() { tr("ready") } else { tr("off") }));
         lines.push(format!("{}: {}", tr("codec"), if g.codec.is_some() { tr("ready") } else { tr("off") }));
+        if let Some(error) = NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            let detail = if error.contains("server carries no mod messages") { "Servidor sin soporte Horizon mod_net".to_string() }
+                else if error.contains("player has not joined yet") { "Esperando a que termine de entrar al servidor".to_string() }
+                else { format!("Error de envío: {error}") };
+            lines.push(detail);
+        }
     }
     drop(g);
     let width = lines.iter().map(|line| game.native_text_width(line)).fold(0.0, f32::max) + 8.0;
