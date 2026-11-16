@@ -1,6 +1,6 @@
 use mod_api::{
-    self, ClientHost, ClientPacketEvent, Hooks, Identifier, InputKeyEvent, KeyAction,
-    ServerboundPlayPacket, Text,
+    self, ClientHost, ClientPacketEvent, ClientTickPostEvent, CommandEvent, Flow, Hooks,
+    Identifier, InputKeyEvent, KeyAction, ServerboundPlayPacket, Text,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -41,27 +41,28 @@ impl Hooks for SimpleVoiceChat {
         }
     }
 
-    fn command(&self, host: &mut dyn ClientHost, command: &str, ran: &mut bool) {
-        let command = command.trim();
+    fn command(&self, host: &mut dyn ClientHost, event: &mut CommandEvent<'_>) -> Flow {
+        let command = event.command.trim();
         let is_voice_command = command == "svc"
             || command.starts_with("svc ")
             || command == "vcgroup"
             || command.starts_with("vcgroup ");
         if !is_voice_command {
-            return;
+            return Flow::Continue;
         }
 
         if let Ok(mut state) = svc_client::runtime::state().lock() {
             let (reply, sends) = state.on_command(command);
             state.pending_sends.extend(sends);
-            *ran = true;
             if !reply.is_empty() {
                 let _ = host.chat_line(Text::literal(format!("[voice] {reply}")));
             }
+            return Flow::Cancel;
         }
+        Flow::Continue
     }
 
-    fn client_tick_post(&self, host: &mut dyn ClientHost) {
+    fn client_tick_post(&self, host: &mut dyn ClientHost, _: &mut ClientTickPostEvent) {
         let playing = host.playing();
         let was_playing = IN_WORLD.swap(playing, Ordering::AcqRel);
 
