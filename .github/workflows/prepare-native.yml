@@ -27,12 +27,12 @@ jobs:
         run: python tools/prepare_native.py
       - name: Commit generated source
         run: |
-          if [ -z "$(git status --porcelain -- src/svc_client/opus_sources.rs)" ]; then
+          git add -f src/svc_client/opus_sources.rs
+          if git diff --cached --quiet; then
             echo "Embedded Opus source is already current."
             exit 0
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/svc_client/opus_sources.rs
           git commit -m "Embed libopus sources for Nightly native package"
           git push origin HEAD:pavohorizonnightly
