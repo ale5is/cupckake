@@ -4,7 +4,7 @@ version = "1.0.2"
 description = "Simple Voice Chat client port for Horizon Nightly."
 authors = ["ale5is"]
 api = "0.2"
-side = "both"
+side = "client"
 
 [native]
 game = "26.3"
