@@ -1,5 +1,5 @@
 use horizon_client::mod_api::{
-    ClientPacketEvent, ClientboundPlayPacket, Hooks, Host, KeyEvent, ServerboundPlayPacket, Text,
+    ClientPacketEvent, ClientboundPlayPacket, Hooks, Host, KeyEvent, ServerboundPlayPacket, Text, TickEvent,
 };
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Instant;
@@ -38,7 +38,7 @@ impl Hooks for SimpleVoiceChat {
         }
     }
 
-    fn tick(&self, host: &mut dyn Host) {
+    fn tick(&self, host: &mut dyn Host, _event: &mut TickEvent) {
         let Some(client) = host.client_state() else {
             return;
         };
