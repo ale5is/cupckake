@@ -52,12 +52,12 @@ def main():
         raise SystemExit("horizon-mixin.toml and compatibility.json pin different Horizon revisions")
     if compatibility["game"] != GAME:
         raise SystemExit(f"This bundle targets Minecraft {GAME}, not {compatibility['game']}")
-    crate_roots = [BUNDLE / c["path"] for c in mixin.get("crate", [])]
-    for crate_root in crate_roots:
-        if not (crate_root / "Cargo.toml").is_file():
-            raise SystemExit(f"Missing Cargo.toml for native crate: {crate_root}")
-        if not (crate_root / "vendor" / "src" / "opus.c").is_file():
-            raise SystemExit(f"Missing vendored Opus source in {crate_root}")
+    api_root = BUNDLE / mixin.get("api", {}).get("path", "api")
+    svc_root = BUNDLE / "crates" / "svc_client"
+    if not (api_root / "Cargo.toml").is_file() or not (api_root / "build.rs").is_file():
+        raise SystemExit("Missing native trait-mod API Cargo.toml or build.rs")
+    if not (svc_root / "vendor" / "src" / "opus.c").is_file():
+        raise SystemExit("Missing vendored Opus source in svc_client")
 
     manifest = {
         "schema": 1,
@@ -71,24 +71,18 @@ def main():
     files = {
         "horizon-native.json": (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
     }
-    crate_relatives = [Path(c["path"]) for c in mixin.get("crate", [])]
-    data_dirs = [Path("data")] + [p / "data" for p in crate_relatives]
+    data_dirs = [Path("data"), Path("crates/svc_client/data")]
     for path in sorted(BUNDLE.rglob("*")):
         if not path.is_file():
             continue
         relative = path.relative_to(BUNDLE)
         allowed = path.suffix in (".rs", ".toml")
         allowed = allowed or any(inside(relative, folder) for folder in data_dirs)
-        if any(inside(relative, folder) for folder in crate_relatives):
-            allowed = allowed or path.name.startswith(ALLOWED_TEXT) or path.name == ".gitignore"
-            if path.suffix in (".c", ".h", ".inc", ".S", ".s", ".in"):
-                continue
         if allowed:
             files[f"mixins/{mod_id}/{relative.as_posix()}"] = path.read_bytes()
 
-    for crate_root, crate_relative in zip(crate_roots, crate_relatives):
-        generated = opus_source_bundle(crate_root)
-        files[f"mixins/{mod_id}/{crate_relative.as_posix()}/opus_sources.rs"] = generated
+    generated = opus_source_bundle(svc_root)
+    files[f"mixins/{mod_id}/crates/svc_client/opus_sources.rs"] = generated
 
     license_path = ROOT / "LICENSE"
     if license_path.is_file():
@@ -97,8 +91,8 @@ def main():
     required = [
         f"mixins/{mod_id}/horizon-mixin.toml",
         f"mixins/{mod_id}/runtime.rs",
-        f"mixins/{mod_id}/crates/svc_client/Cargo.toml",
-        f"mixins/{mod_id}/crates/svc_client/build.rs",
+        f"mixins/{mod_id}/api/Cargo.toml",
+        f"mixins/{mod_id}/api/build.rs",
         f"mixins/{mod_id}/crates/svc_client/opus_sources.rs",
     ]
     missing = [name for name in required if name not in files]
