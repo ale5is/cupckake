@@ -63,7 +63,7 @@ pub struct OpusDecoder {
     _opaque: [u8; 0],
 }
 
-extern "C" {
+unsafe extern "C" {
     fn opus_encoder_create(
         fs: c_int,
         channels: c_int,
