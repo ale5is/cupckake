@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [workspace]
-members = ["mixins/simple-voice-chat/crates/svc_client"]
+members = ["src/svc_client"]
 resolver = "3"
 
 [lib]
