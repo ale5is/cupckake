@@ -122,7 +122,7 @@ impl Session {
         self.send(&ToServer::Authenticate {
             player: self.player,
             secret,
-        });
+        })?;
         self.state = State::Connecting;
         self.last_seen = Instant::now();
         Ok(())
@@ -137,16 +137,22 @@ impl Session {
         self.events.clear();
     }
 
-    fn send(&mut self, packet: &ToServer) {
+    fn send(&mut self, packet: &ToServer) -> std::io::Result<()> {
         let (Some(cipher), Some(server)) = (self.cipher.as_ref(), self.server) else {
-            return;
+            return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "UDP session is not initialized"));
         };
-        let Some(socket) = &self.socket else { return };
-        let Some(sealed) = cipher.seal(&self.rng, &packet.write()) else {
-            return;
-        };
+        let socket = self.socket.as_ref().ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::NotConnected, "UDP socket is not initialized")
+        })?;
+        let sealed = cipher.seal(&self.rng, &packet.write()).ok_or_else(|| {
+            std::io::Error::new(std::io::ErrorKind::InvalidData, "could not encrypt UDP packet")
+        })?;
         let datagram = client_datagram(self.player, &sealed);
-        let _ = socket.send_to(&datagram, server);
+        let sent = socket.send_to(&datagram, server)?;
+        if sent != datagram.len() {
+            return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "incomplete UDP datagram send"));
+        }
+        Ok(())
     }
 
     /// One 20 ms Opus frame from the mic; an empty frame stops the stream.
@@ -155,7 +161,7 @@ impl Session {
             return;
         }
         self.mic_seq += 1;
-        self.send(&ToServer::Mic {
+        let _ = self.send(&ToServer::Mic {
             data: frame.to_vec(),
             sequence: self.mic_seq,
             whispering: self.whispering,
@@ -169,11 +175,11 @@ impl Session {
         }
         if self.last_keep_alive.elapsed() >= self.keep_alive_every {
             self.last_keep_alive = Instant::now();
-            self.send(&ToServer::KeepAlive);
+            let _ = self.send(&ToServer::KeepAlive);
         }
         if self.last_ping.elapsed() >= self.ping_every {
             self.last_ping = Instant::now();
-            self.send(&ToServer::Ping {
+            let _ = self.send(&ToServer::Ping {
                 id: self.player,
                 timestamp: unix_ms(),
             });
