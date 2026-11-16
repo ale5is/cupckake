@@ -36,7 +36,7 @@ jobs:
           if-no-files-found: error
           retention-days: 30
       - name: Publish GitHub Release for launcher installation
-        if: github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+        if: github.ref == 'refs/heads/main' && (github.event_name == 'workflow_dispatch' || github.event_name == 'push')
         uses: softprops/action-gh-release@v2
         with:
           tag_name: simple-voice-chat-v1.0.4
