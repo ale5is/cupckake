@@ -53,9 +53,17 @@ pub fn load_preferences(game: &crate::game::Game<'_>) {
     let mut g = locked(); g.cfg.muted = muted; g.mute_all = mute_all; g.show_hud = show_hud; g.show_debug = show_debug; g.hud_corner = hud_corner; g.muted_players = muted_players;
     if let Some(session) = &mut g.session { session.set_muted(muted); }
 }
+fn resolve_server_host(address: &str) -> Option<String> {
+    use std::net::ToSocketAddrs;
+    address.to_socket_addrs().ok()?.next().map(|address| address.ip().to_string())
+}
 pub fn world_open_ready(game: &mut crate::game::Game<'_>) {
     *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    load_preferences(game); let mut g = locked(); g.world_open();
+    let server_host_hint = game.server_address().and_then(resolve_server_host);
+    load_preferences(game);
+    let mut g = locked();
+    g.world_open();
+    g.server_host_hint = server_host_hint;
     let (channel, body) = Glue::handshake(); queue_outbound(channel, body);
     let notes = g.start_audio(); g.notes.extend(notes);
 }
