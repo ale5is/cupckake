@@ -39,7 +39,16 @@ pub fn world_lifecycle(game: &mut crate::game::Game<'_>, phase: &crate::game::na
     use crate::game::native_lifecycle::WorldPhase::{WorldCloseFailed, WorldCloseFinal, WorldOpenReady};
     match phase { WorldOpenReady => world_open_ready(game), WorldCloseFinal | WorldCloseFailed => world_closed(), _ => {} }
 }
-pub fn on_net(channel: &str, data: &[u8]) { locked().on_net(channel, data, None, Instant::now()); }
+pub fn on_net(channel: &str, data: &[u8]) {
+    let mut g = locked();
+    g.on_net(channel, data, None, Instant::now());
+    if channel == protocol::SECRET {
+        if let Some(session) = &mut g.session { session.set_muted(g.cfg.muted); }
+        let muted = g.cfg.muted;
+        drop(g);
+        queue_outbound(protocol::UPDATE_STATE.to_string(), protocol::update_state(muted));
+    }
+}
 pub fn on_player_submit(_player: &crate::game::native_mob_draw::NativeMobRender<'_>, _who: &crate::game::native_mob_draw::NativePlayerRender<'_>) {}
 pub fn on_key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     let ptt = game.native_mod_key(ID, "ptt", "key.keyboard.v"); let mute = game.native_mod_key(ID, "mute", "key.keyboard.m");
@@ -52,7 +61,21 @@ pub fn on_command(command: &str, ran: &mut bool) {
     let (feedback, outbound) = locked().on_command(command.trim_start_matches('/'));
     for (channel, body) in outbound { queue_outbound(channel, body); } if !feedback.is_empty() { eprintln!("[voice] {feedback}"); } *ran = true;
 }
-pub fn on_frame(game: &mut crate::game::Game<'_>, _elapsed: std::time::Duration) { let _ = locked().on_frame(Instant::now()); let _ = game; }
+pub fn on_frame(game: &mut crate::game::Game<'_>, _elapsed: std::time::Duration) {
+    let mut g = locked();
+    let _ = g.on_frame(Instant::now());
+    if g.reconnect_pending {
+        g.reconnect_pending = false;
+        g.session = None;
+        g.connection_requested = true;
+        let (channel, body) = Glue::handshake();
+        drop(g);
+        queue_outbound(channel, body);
+    } else {
+        drop(g);
+    }
+    let _ = game;
+}
 pub fn listed(mods: &mut Vec<crate::game::native_hooks::NativeMod>) {
     mods.push(crate::game::native_hooks::NativeMod { id: ID.into(), title: format!("{NAME} {VERSION}"), description: DESCRIPTION.into(), keys: vec![
         ["ptt".into(), "Push to talk".into(), "key.keyboard.v".into()], ["mute".into(), "Mute microphone".into(), "key.keyboard.m".into()],
