@@ -48,6 +48,7 @@ pub struct Glue {
     pub show_hud: bool,
     pub show_debug: bool,
     pub hud_corner: u8,
+    pub player_menu_open: bool,
     pub speaking_until: HashMap<u128, Instant>,
     /// Lines for the chat box: group joins, players entering or leaving voice.
     pub notes: Vec<String>,
@@ -80,6 +81,7 @@ impl Default for Glue {
             show_hud: true,
             show_debug: false,
             hud_corner: 1,
+            player_menu_open: false,
             speaking_until: HashMap::new(),
             notes: Vec::new(),
             reconnect_pending: false,
