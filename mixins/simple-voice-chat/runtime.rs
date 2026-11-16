@@ -146,7 +146,7 @@ fn tr(key: &str) -> &'static str {
         "top_right" => if es { "Superior derecha" } else if pt { "Superior direita" } else if fr { "Haut droite" } else if de { "Oben rechts" } else if it { "In alto a destra" } else if ru { "Сверху справа" } else if zh { "右上" } else if ja { "右上" } else { "Top right" },
         "bottom_left" => if es { "Inferior izquierda" } else if pt { "Inferior esquerda" } else if fr { "Bas gauche" } else if de { "Unten links" } else if it { "In basso a sinistra" } else if ru { "Снизу слева" } else if zh { "左下" } else if ja { "左下" } else { "Bottom left" },
         "bottom_right" => if es { "Inferior derecha" } else if pt { "Inferior direita" } else if fr { "Bas droite" } else if de { "Unten rechts" } else if it { "In basso a destra" } else if ru { "Снизу справа" } else if zh { "右下" } else if ja { "右下" } else { "Bottom right" },
-        _ => key,
+        _ => "Unknown",
     }
 }
 
