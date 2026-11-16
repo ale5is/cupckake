@@ -549,6 +549,35 @@ mod tests {
     }
 
     #[test]
+    fn empty_voice_host_requires_the_actual_game_server_host() {
+        let mut g = glue();
+        g.world_open();
+        let body = secret_bytes(7, 24454, 48.0);
+        let accepted = g.on_net("voicechat:secret", &body, None, Instant::now());
+        assert!(accepted);
+        assert!(g.session.is_none());
+        assert!(g.server_addr.is_none());
+        assert!(g.connection_error.as_deref().unwrap().contains("voice_host está vacío"));
+    }
+
+    #[test]
+    fn invalid_voice_host_is_reported_instead_of_using_loopback() {
+        let mut g = glue();
+        g.world_open();
+        let mut body = secret_bytes(7, 24454, 48.0);
+        // Replace the empty voice_host VarInt with a deliberately invalid hostname.
+        body.pop();
+        body.pop();
+        body.extend_from_slice(&[12]);
+        body.extend_from_slice(b"invalid host");
+        body.push(0);
+        let accepted = g.on_net("voicechat:secret", &body, None, Instant::now());
+        assert!(accepted);
+        assert!(g.session.is_none());
+        assert!(g.connection_error.as_deref().unwrap().contains("could not resolve"));
+    }
+
+    #[test]
     fn malformed_secret_is_reported_without_creating_a_session() {
         let mut g = glue();
         g.world_open();
