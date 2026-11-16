@@ -13,8 +13,10 @@ fn locked() -> std::sync::MutexGuard<'static, Glue> { state().lock().unwrap_or_e
 pub fn queue_outbound(channel: String, body: Vec<u8>) { OUT.lock().unwrap_or_else(|e| e.into_inner()).push((channel, body)); }
 pub fn drain_outbound() -> Vec<(String, Vec<u8>)> { std::mem::take(&mut *OUT.lock().unwrap_or_else(|e| e.into_inner())) }
 pub fn on_net_send_result(result: Result<(), String>) {
-    let mut error = NET_ERROR.lock().unwrap_or_else(|e| e.into_inner());
-    *error = result.err();
+    if let Err(message) = result {
+        let mut error = NET_ERROR.lock().unwrap_or_else(|e| e.into_inner());
+        *error = Some(message);
+    }
 }
 fn parse_muted_players(value: Option<String>) -> std::collections::HashSet<u128> {
     value.unwrap_or_default().split(',').filter_map(|v| v.trim().parse().ok()).collect()
