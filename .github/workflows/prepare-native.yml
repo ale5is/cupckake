@@ -27,6 +27,8 @@ jobs:
         run: python tools/prepare_native.py
       - name: Commit generated source
         run: |
+          git fetch origin pavohorizonnightly
+          git rebase origin/pavohorizonnightly
           git add -f src/svc_client/opus_sources.rs
           if git diff --cached --quiet; then
             echo "Embedded Opus source is already current."
