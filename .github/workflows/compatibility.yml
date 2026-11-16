@@ -40,14 +40,7 @@ jobs:
         id: compatibility
         working-directory: cupckake
         run: |
-          python - <<'PY'
-          import json
-          import os
-          from pathlib import Path
-          metadata = json.loads(Path("compatibility.json").read_text())
-          with open(os.environ["GITHUB_OUTPUT"], "a") as output:
-              output.write(f"horizon_revision={metadata['horizon_revision']}\\n")
-          PY
+          echo "horizon_revision=$(python -c 'import json; print(json.load(open("compatibility.json"))["horizon_revision"])')" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           repository: horizon-rust/horizon
