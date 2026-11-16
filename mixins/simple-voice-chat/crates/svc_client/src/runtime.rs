@@ -57,6 +57,8 @@ pub struct Glue {
     pub connection_requested: bool,
     /// Last error while establishing the UDP voice session.
     pub connection_error: Option<String>,
+    /// Human-readable stage of the game-channel and UDP handshake.
+    pub connection_stage: String,
     /// Mod-channel packets waiting for the frame helper to send.
     pub pending_sends: Vec<(String, Vec<u8>)>,
     /// Live microphone capture; None until start_audio succeeds.
@@ -89,6 +91,7 @@ impl Default for Glue {
             reconnect_pending: false,
             connection_requested: false,
             connection_error: None,
+            connection_stage: "Desconectado".into(),
             pending_sends: Vec::new(),
             mic: None,
             speaker: None,
@@ -126,6 +129,7 @@ impl Glue {
         self.reconnect_pending = false;
         self.connection_requested = true;
         self.connection_error = None;
+        self.connection_stage = "Enviando voicechat:request_secret".into();
         self.notes.clear();
         self.pending_sends.clear();
     }
@@ -145,11 +149,24 @@ impl Glue {
     }
 
     /// A message arrived from the server on one of our channels.
-    pub fn on_net(&mut self, channel: &str, data: &[u8], hint: Option<&str>, now: Instant) {
-        let Some(parsed) = proto::read(channel, data) else { return };
-        let Ok(msg) = parsed else { return };
+    pub fn on_net(&mut self, channel: &str, data: &[u8], hint: Option<&str>, now: Instant) -> bool {
+        let Some(parsed) = proto::read(channel, data) else { return false };
+        let msg = match parsed {
+            Ok(msg) => msg,
+            Err(_) => {
+                if channel == proto::SECRET {
+                    self.connection_stage = "SECRET recibido, pero no se pudo decodificar".into();
+                    self.connection_error = Some("mensaje voicechat:secret malformado o incompleto".into());
+                    self.connection_requested = false;
+                    return false;
+                }
+                return false;
+            }
+        };
         match msg {
             proto::ServerMessage::Secret { secret, port, player, distance, voice_host, .. } => {
+                self.connection_stage = "SECRET recibido y decodificado".into();
+                self.connection_error = None;
                 let host = if voice_host.is_empty() {
                     hint.unwrap_or("127.0.0.1").to_string()
                 } else {
@@ -160,9 +177,19 @@ impl Glue {
                 let mut s = Session::new(player);
                 s.set_max_distance(distance);
                 s.set_muted(self.cfg.muted);
-                self.connection_error = s.on_secret(secret, target).err().map(|error| format!("UDP Authenticate: {error}"));
+                match s.on_secret(secret, target) {
+                    Ok(()) => {
+                        self.connection_stage = "Socket UDP creado; Authenticate enviado; esperando AuthenticateAck".into();
+                        self.connection_error = None;
+                    }
+                    Err(error) => {
+                        self.connection_stage = "Falló la creación del socket o el envío de Authenticate".into();
+                        self.connection_error = Some(format!("UDP Authenticate: {error}"));
+                    }
+                }
                 self.connection_requested = false;
                 self.session = Some(s);
+                return true;
             }
             proto::ServerMessage::State(st) => self.see_state(&st, now),
             proto::ServerMessage::States(all) => {
@@ -198,6 +225,7 @@ impl Glue {
             }
             _ => {}
         }
+        false
     }
 
     fn see_state(&mut self, st: &proto::PlayerState, now: Instant) {
@@ -292,6 +320,13 @@ impl Glue {
         let Some(s) = &mut self.session else { return Vec::new() };
         s.tick();
         let events = s.pump();
+        if let Some(error) = s.last_error().map(str::to_owned) {
+            self.connection_stage = "Error al recibir o validar paquetes UDP".into();
+            self.connection_error = Some(error);
+        } else if s.state() == crate::session::State::Connected {
+            self.connection_stage = "AuthenticateAck recibido; UDP autenticado".into();
+            self.connection_error = None;
+        }
         for e in &events {
             if let Event::Dropped(_) = e {
                 self.reconnect_pending = true;
