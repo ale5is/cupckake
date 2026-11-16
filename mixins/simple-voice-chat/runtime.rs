@@ -240,6 +240,7 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
         let udp = match g.session.as_ref().map(|session| session.state()) {
             None if g.connection_requested => tr("waiting_secret"),
             None => tr("no_session"),
+            Some(svc_client::session::State::Idle) if g.reconnect_pending => tr("reconnecting"),
             Some(svc_client::session::State::Idle) => tr("disconnected"),
             Some(svc_client::session::State::RequestingSecret) => tr("waiting_secret"),
             Some(svc_client::session::State::Connecting) => tr("auth_pending"),
