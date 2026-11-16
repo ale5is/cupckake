@@ -2,8 +2,13 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let local_vendor = manifest_dir.join("vendor");
-    let out_vendor = if local_vendor.join("src/opus.c").is_file() {
+    let local_vendor = [
+        manifest_dir.join("vendor"),
+        manifest_dir.join("../crates/svc_client/vendor"),
+    ]
+    .into_iter()
+    .find(|path| path.join("src/opus.c").is_file());
+    let out_vendor = if let Some(local_vendor) = local_vendor {
         local_vendor
     } else {
         let embedded = if manifest_dir.join("opus_sources.rs").is_file() {
