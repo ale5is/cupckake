@@ -36,10 +36,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           path: cupckake
+      - name: Read pinned Horizon revision
+        id: compatibility
+        working-directory: cupckake
+        run: |
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          metadata = json.loads(Path("compatibility.json").read_text())
+          print(f"horizon_revision={metadata['horizon_revision']}")
+          PY
+          python -c "import json; print('horizon_revision=' + json.load(open('compatibility.json'))['horizon_revision')" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
           repository: horizon-rust/horizon
-          ref: 4b08a43f1d32c3946f2638850f9d120bc7ff4a26
+          ref: ${{ steps.compatibility.outputs.horizon_revision }}
           path: horizon
           fetch-depth: 1
       - uses: actions/checkout@v4
