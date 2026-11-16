@@ -32,6 +32,43 @@ impl Default for VoiceConfig {
     }
 }
 
+fn normalize_key(code: &str) -> String {
+    let Some(key) = code.strip_prefix("key.keyboard.") else {
+        return code.to_string();
+    };
+    if key.len() == 1 && key.as_bytes()[0].is_ascii_alphabetic() {
+        return format!("Key{}", key.to_ascii_uppercase());
+    }
+    if key.len() == 1 && key.as_bytes()[0].is_ascii_digit() {
+        return format!("Digit{key}");
+    }
+    match key {
+        "space" => "Space".into(),
+        "left.shift" => "ShiftLeft".into(),
+        "right.shift" => "ShiftRight".into(),
+        "left.control" => "ControlLeft".into(),
+        "right.control" => "ControlRight".into(),
+        "left.alt" => "AltLeft".into(),
+        "right.alt" => "AltRight".into(),
+        "enter" => "Enter".into(),
+        "escape" => "Escape".into(),
+        "tab" => "Tab".into(),
+        "backspace" => "Backspace".into(),
+        "delete" => "Delete".into(),
+        "insert" => "Insert".into(),
+        "home" => "Home".into(),
+        "end" => "End".into(),
+        "page.up" => "PageUp".into(),
+        "page.down" => "PageDown".into(),
+        "up" => "ArrowUp".into(),
+        "down" => "ArrowDown".into(),
+        "left" => "ArrowLeft".into(),
+        "right" => "ArrowRight".into(),
+        other if other.starts_with('f') => other.to_ascii_uppercase(),
+        other => other.to_string(),
+    }
+}
+
 /// The mod's whole state, shared by the helpers behind a mutex.
 pub struct Glue {
     pub cfg: VoiceConfig,
@@ -278,7 +315,9 @@ impl Glue {
 
     /// A key event: PTT on press and release, mute on the mute key.
     pub fn on_key(&mut self, code: &str, pressed: bool) -> Option<String> {
-        if code.eq_ignore_ascii_case(&self.cfg.ptt_key) {
+        let code = normalize_key(code);
+        let ptt_key = normalize_key(&self.cfg.ptt_key);
+        if code.eq_ignore_ascii_case(&ptt_key) {
             self.ptt_held = pressed;
             return None;
         }
@@ -494,6 +533,14 @@ mod tests {
         assert!(reply.contains("den"));
         assert_eq!(sends.len(), 1);
         assert_eq!(sends[0].0, proto::CREATE_GROUP);
+    }
+
+    #[test]
+    fn horizon_key_names_match_legacy_ptt_bindings() {
+        assert_eq!(normalize_key("key.keyboard.v"), "KeyV");
+        assert_eq!(normalize_key("key.keyboard.m"), "KeyM");
+        assert_eq!(normalize_key("key.keyboard.space"), "Space");
+        assert_eq!(normalize_key("KeyB"), "KeyB");
     }
 
     #[test]
