@@ -5,6 +5,7 @@ on:
     branches:
       - pavohorizonnightly
     paths:
+      - ".github/workflows/prepare-native.yml"
       - "tools/prepare_native.py"
       - "mixins/simple-voice-chat/crates/svc_client/vendor/**"
   workflow_dispatch:
