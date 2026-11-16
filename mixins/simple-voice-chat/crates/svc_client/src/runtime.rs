@@ -46,6 +46,9 @@ pub struct Glue {
     pub mute_all: bool,
     pub muted_players: HashSet<u128>,
     pub show_hud: bool,
+    pub show_debug: bool,
+    pub hud_corner: u8,
+    pub player_menu_open: bool,
     pub speaking_until: HashMap<u128, Instant>,
     /// Lines for the chat box: group joins, players entering or leaving voice.
     pub notes: Vec<String>,
@@ -76,6 +79,9 @@ impl Default for Glue {
             mute_all: false,
             muted_players: HashSet::new(),
             show_hud: true,
+            show_debug: false,
+            hud_corner: 1,
+            player_menu_open: false,
             speaking_until: HashMap::new(),
             notes: Vec::new(),
             reconnect_pending: false,
@@ -191,6 +197,13 @@ impl Glue {
     }
 
     fn see_state(&mut self, st: &proto::PlayerState, now: Instant) {
+        if st.disconnected {
+            self.uuid_by_name.remove(&st.name);
+            self.name_by_uuid.remove(&st.uuid);
+            self.speaking_until.remove(&st.uuid);
+            if let Some(session) = &mut self.session { session.forget_position(st.uuid); }
+            return;
+        }
         let fresh = !self.uuid_by_name.contains_key(&st.name);
         self.uuid_by_name.insert(st.name.clone(), st.uuid);
         self.name_by_uuid.insert(st.uuid, st.name.clone());
