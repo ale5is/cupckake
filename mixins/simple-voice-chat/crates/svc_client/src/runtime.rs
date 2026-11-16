@@ -499,11 +499,11 @@ mod tests {
     #[test]
     fn ptt_and_mute_toggle() {
         let mut g = glue();
-        assert_eq!(g.on_key("KeyV", true), None);
+        assert_eq!(g.on_key("KeyV", true, "KeyV", "KeyM"), None);
         assert!(g.ptt_held);
-        g.on_key("KeyV", false);
+        g.on_key("KeyV", false, "KeyV", "KeyM");
         assert!(!g.ptt_held);
-        assert_eq!(g.on_key("KeyM", true), Some("voice muted".into()));
+        assert_eq!(g.on_key("KeyM", true, "KeyV", "KeyM"), Some("voice muted".into()));
         assert!(g.cfg.muted);
     }
 
