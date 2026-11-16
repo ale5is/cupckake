@@ -32,7 +32,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: simple-voice-chat-hnmod
-          path: target/simple_voice_chat-1.0.3.hnmod
+          path: target/simple_voice_chat-1.0.4.hnmod
           if-no-files-found: error
           retention-days: 30
       - name: Publish GitHub Release for launcher installation
@@ -46,6 +46,6 @@ jobs:
             Native Horizon mod package for Minecraft 26.3.
 
             Install from Horizon Launcher using the GitHub repository/release source. The launcher compiles the native mod locally.
-          files: target/simple_voice_chat-1.0.3.hnmod
+          files: target/simple_voice_chat-1.0.4.hnmod
           fail_on_unmatched_files: true
           make_latest: true
