@@ -116,6 +116,8 @@ fn tr(key: &str) -> &'static str {
         "debug" => if es { "Diagnóstico de conexión" } else if pt { "Diagnóstico da conexão" } else if fr { "Diagnostic de connexion" } else if de { "Verbindungsdiagnose" } else if it { "Diagnostica connessione" } else if ru { "Диагностика соединения" } else if zh { "连接诊断" } else if ja { "接続診断" } else { "Connection debug" },
         "position" => if es { "Posición del HUD" } else if pt { "Posição do HUD" } else if fr { "Position du HUD" } else if de { "HUD-Position" } else if it { "Posizione HUD" } else if ru { "Положение HUD" } else if zh { "HUD位置" } else if ja { "HUDの位置" } else { "HUD position" },
         "audible" => if es { "SE OYE" } else if pt { "AUDÍVEL" } else if fr { "AUDIBLE" } else if de { "HÖRBAR" } else if it { "UDIBILE" } else if ru { "СЛЫШНО" } else if zh { "可听见" } else if ja { "聞こえる" } else { "AUDIBLE" },
+        "back" => if es { "Volver a configuración" } else if pt { "Voltar às configurações" } else if fr { "Retour aux paramètres" } else if de { "Zurück zu den Einstellungen" } else if it { "Torna alle impostazioni" } else if ru { "Вернуться в настройки" } else if zh { "返回设置" } else if ja { "設定に戻る" } else { "Back to settings" },
+        "manage_players" => if es { "Administrar jugadores" } else if pt { "Gerenciar jogadores" } else if fr { "Gérer les joueurs" } else if de { "Spieler verwalten" } else if it { "Gestisci giocatori" } else if ru { "Управление игроками" } else if zh { "管理玩家" } else if ja { "プレイヤーを管理" } else { "Manage players" },
         "players" => if es { "Jugadores (clic para silenciar)" } else if pt { "Jogadores (clique para silenciar)" } else if fr { "Joueurs (cliquer pour couper)" } else if de { "Spieler (zum Stummschalten klicken)" } else if it { "Giocatori (clicca per silenziare)" } else if ru { "Игроки (нажмите, чтобы заглушить)" } else if zh { "玩家（点击静音）" } else if ja { "プレイヤー（クリックでミュート）" } else { "Players (click to mute)" },
         "no_players" => if es { "No hay jugadores de voz detectados" } else if pt { "Nenhum jogador de voz detectado" } else if fr { "Aucun joueur vocal détecté" } else if de { "Keine Sprachspieler erkannt" } else if it { "Nessun giocatore vocale rilevato" } else if ru { "Голосовые игроки не обнаружены" } else if zh { "未检测到语音玩家" } else if ja { "ボイスプレイヤーが見つかりません" } else { "No voice players detected" },
         "cannot_block" => if es { "Bloquear mi voz por jugador requiere soporte del servidor" } else if pt { "Bloquear minha voz por jogador exige suporte do servidor" } else if fr { "Bloquer ma voix par joueur nécessite le serveur" } else if de { "Mein Mikrofon pro Spieler blockieren erfordert Serverunterstützung" } else if it { "Bloccare la mia voce per giocatore richiede il server" } else if ru { "Блокировка моего голоса для игрока требует поддержки сервера" } else if zh { "按玩家屏蔽我的语音需要服务器支持" } else if ja { "プレイヤー別の送信ミュートにはサーバー対応が必要です" } else { "Per-player outgoing mute requires server support" },
@@ -182,7 +184,7 @@ pub fn settings_page(game: &mut crate::game::Game<'_>, mod_id: &str, buttons: &m
     load_preferences(game);
     let g = locked();
     if g.player_menu_open {
-        buttons.push(if horizon_client::lang::code().starts_with("es") { "Volver a configuración" } else { "Back to settings" }.into());
+        buttons.push(tr("back").into());
         buttons.push(tr("players").into());
         let rows = g.player_rows(Instant::now());
         for (name, _, muted, _) in &rows {
@@ -198,7 +200,7 @@ pub fn settings_page(game: &mut crate::game::Game<'_>, mod_id: &str, buttons: &m
     buttons.push(format!("{}: {}", tr("debug"), if g.show_debug { tr("on") } else { tr("off") }));
     let corner = match g.hud_corner { 0 => tr("top_left"), 1 => tr("top_right"), 2 => tr("bottom_left"), _ => tr("bottom_right") };
     buttons.push(format!("{}: {}", tr("position"), corner));
-    buttons.push(if horizon_client::lang::code().starts_with("es") { "Administrar jugadores" } else { "Manage players" }.into());
+    buttons.push(tr("manage_players").into());
 }
 
 pub fn settings_click(game: &mut crate::game::Game<'_>, mod_id: &str, button: usize) {
@@ -208,9 +210,9 @@ pub fn settings_click(game: &mut crate::game::Game<'_>, mod_id: &str, button: us
     if g.player_menu_open {
         if button == 0 {
             g.player_menu_open = false;
-        } else {
+        } else if button >= 2 {
             let rows = g.player_rows(Instant::now());
-            if let Some((_, uuid, _, _)) = rows.get(button.saturating_sub(2)) {
+            if let Some((_, uuid, _, _)) = rows.get(button - 2) {
                 if !g.muted_players.remove(uuid) { g.muted_players.insert(*uuid); }
             }
         }
