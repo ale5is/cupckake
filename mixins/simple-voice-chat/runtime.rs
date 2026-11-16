@@ -273,6 +273,9 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
         };
         lines.push(format!("{}: {}", tr("udp"), udp));
         lines.push(format!("{}: {}", tr("server"), g.server_addr.map(|addr| addr.to_string()).unwrap_or_else(|| "—".into())));
+        if let Some(error) = &g.connection_error {
+            lines.push(format!("Error UDP: {error}"));
+        }
         lines.push(format!("{}: {}", tr("mic_input"), if g.mic.is_some() { tr("ready") } else { tr("off") }));
         lines.push(format!("{}: {}", tr("audio_output"), if g.speaker.is_some() { tr("ready") } else { tr("off") }));
         lines.push(format!("{}: {}", tr("codec"), if g.codec.is_some() { tr("ready") } else { tr("off") }));
