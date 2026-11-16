@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 fn main() {
     let manifest_dir = PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").unwrap());
-    let bundled_vendor = manifest_dir.join("vendor");
+    let bundled_vendor = manifest_dir.join("../crates/svc_client/vendor");
     let out_vendor = if bundled_vendor.is_dir() {
         bundled_vendor
     } else {
@@ -12,7 +12,7 @@ fn main() {
 }
 
 fn restore_bundled_opus(manifest_dir: &Path) -> PathBuf {
-    let encoded = std::fs::read_to_string(manifest_dir.join("opus_sources.rs"))
+    let encoded = std::fs::read_to_string(manifest_dir.join("../crates/svc_client/opus_sources.rs"))
         .expect("native mod package is missing embedded Opus sources");
     let out = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("opus-vendor");
     let mut current: Option<PathBuf> = None;
