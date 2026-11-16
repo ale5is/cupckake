@@ -55,6 +55,8 @@ pub struct Glue {
     /// Set when the UDP connection dropped; the frame helper re-handshakes.
     pub reconnect_pending: bool,
     pub connection_requested: bool,
+    /// Last error while establishing the UDP voice session.
+    pub connection_error: Option<String>,
     /// Mod-channel packets waiting for the frame helper to send.
     pub pending_sends: Vec<(String, Vec<u8>)>,
     /// Live microphone capture; None until start_audio succeeds.
@@ -86,6 +88,7 @@ impl Default for Glue {
             notes: Vec::new(),
             reconnect_pending: false,
             connection_requested: false,
+            connection_error: None,
             pending_sends: Vec::new(),
             mic: None,
             speaker: None,
@@ -122,6 +125,7 @@ impl Glue {
         self.ptt_held = false;
         self.reconnect_pending = false;
         self.connection_requested = true;
+        self.connection_error = None;
         self.notes.clear();
         self.pending_sends.clear();
     }
@@ -156,7 +160,7 @@ impl Glue {
                 let mut s = Session::new(player);
                 s.set_max_distance(distance);
                 s.set_muted(self.cfg.muted);
-                s.on_secret(secret, target).ok();
+                self.connection_error = s.on_secret(secret, target).err().map(|error| format!("UDP Authenticate: {error}"));
                 self.connection_requested = false;
                 self.session = Some(s);
             }
