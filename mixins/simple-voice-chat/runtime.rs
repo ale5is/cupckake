@@ -181,38 +181,50 @@ pub fn settings_page(game: &mut crate::game::Game<'_>, mod_id: &str, buttons: &m
     if mod_id != ID { return; }
     load_preferences(game);
     let g = locked();
+    if g.player_menu_open {
+        buttons.push(if horizon_client::lang::code().starts_with("es") { "Volver a configuración" } else { "Back to settings" }.into());
+        buttons.push(tr("players").into());
+        let rows = g.player_rows(Instant::now());
+        for (name, _, muted, _) in &rows {
+            buttons.push(format!("{}: {}", name, if *muted { tr("muted") } else { tr("audible") }));
+        }
+        if rows.is_empty() { buttons.push(tr("no_players").into()); }
+        buttons.push(tr("cannot_block").into());
+        return;
+    }
     buttons.push(format!("{}: {}", tr("microphone"), if g.cfg.muted { tr("muted") } else { tr("ready") }));
     buttons.push(format!("{}: {}", tr("mute_all"), if g.mute_all { tr("on") } else { tr("off") }));
     buttons.push(format!("{}: {}", tr("hud"), if g.show_hud { tr("on") } else { tr("off") }));
     buttons.push(format!("{}: {}", tr("debug"), if g.show_debug { tr("on") } else { tr("off") }));
     let corner = match g.hud_corner { 0 => tr("top_left"), 1 => tr("top_right"), 2 => tr("bottom_left"), _ => tr("bottom_right") };
     buttons.push(format!("{}: {}", tr("position"), corner));
-    buttons.push(tr("players").into());
-    let rows = g.player_rows(Instant::now());
-    for (name, _, muted, _) in &rows {
-        buttons.push(format!("{}: {}", name, if *muted { tr("muted") } else { tr("audible") }));
-    }
-    if rows.is_empty() { buttons.push(tr("no_players").into()); }
-    buttons.push(tr("cannot_block").into());
+    buttons.push(if horizon_client::lang::code().starts_with("es") { "Administrar jugadores" } else { "Manage players" }.into());
 }
 
 pub fn settings_click(game: &mut crate::game::Game<'_>, mod_id: &str, button: usize) {
     if mod_id != ID { return; }
     load_preferences(game);
     let mut g = locked();
+    if g.player_menu_open {
+        if button == 0 {
+            g.player_menu_open = false;
+        } else {
+            let rows = g.player_rows(Instant::now());
+            if let Some((_, uuid, _, _)) = rows.get(button.saturating_sub(2)) {
+                if !g.muted_players.remove(uuid) { g.muted_players.insert(*uuid); }
+            }
+        }
+        save_preferences(game, &g);
+        return;
+    }
     match button {
         0 => { g.cfg.muted = !g.cfg.muted; let muted = g.cfg.muted; if let Some(s) = &mut g.session { s.set_muted(muted); } queue_outbound(protocol::UPDATE_STATE.to_string(), protocol::update_state(muted)); }
         1 => g.mute_all = !g.mute_all,
         2 => g.show_hud = !g.show_hud,
         3 => g.show_debug = !g.show_debug,
         4 => g.hud_corner = (g.hud_corner + 1) % 4,
-        5 => {}
-        n => {
-            let rows = g.player_rows(Instant::now());
-            if let Some((_, uuid, _, _)) = rows.get(n - 6) {
-                if !g.muted_players.remove(uuid) { g.muted_players.insert(*uuid); }
-            }
-        }
+        5 => g.player_menu_open = true,
+        _ => {}
     }
     save_preferences(game, &g);
 }
