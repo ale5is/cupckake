@@ -6,8 +6,8 @@ This repository produces a native Horizon mod package (.hnmod). Install the pack
 
 ## Download and install
 
-1. Download the `simple-voice-chat-hnmod` artifact from the [successful GitHub Actions run](https://github.com/ale5is/cupckake/actions/runs/43767580798).
-2. Extract `simple_voice_chat-1.0.1.hnmod` from the downloaded artifact ZIP.
+1. Download the `simple-voice-chat-hnmod` artifact from the [successful GitHub Actions run](https://github.com/ale5is/cupckake/releases/tag/simple-voice-chat-v1.0.4).
+2. Extract `simple_voice_chat-1.0.4.hnmod` from the downloaded artifact ZIP.
 3. Import/install that `.hnmod` through Horizon's native Mods interface for the desired instance.
 4. Accept Horizon's native-code trust warning.
 5. Build the instance from Horizon's Mods page.
@@ -25,9 +25,9 @@ The output is `target/simple_voice_chat-1.0.1.hnmod`. The packager includes the 
 ## Compatibility
 
 - Minecraft: 26.3
-- Horizon revision: `4b08a43f1d32c3946f2638850f9d120bc7ff4a26`
+- Horizon revision: `6475f62f3c834b7489e1816bf47f47ea5eb2b879`
 - Horizon Mixins revision: `e59da9094f0c2fdda6c627fe9eff22dec6a906f0`
-- Native hooks API: 645
+- Native hooks API: 359
 
 The package is source-only. The launcher performs the native compilation on the user's computer; GitHub Actions packages and validates the .hnmod and checks the mixin against the pinned Horizon source. This is not a complete precompiled Horizon client. The automated checks do not replace an in-game microphone/server test.
 
