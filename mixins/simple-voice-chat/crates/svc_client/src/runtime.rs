@@ -326,6 +326,9 @@ impl Glue {
         } else if s.state() == crate::session::State::Connected {
             self.connection_stage = "AuthenticateAck recibido; UDP autenticado".into();
             self.connection_error = None;
+        } else if s.state() == crate::session::State::Connecting {
+            self.connection_stage = "Socket UDP creado; Authenticate enviado; esperando AuthenticateAck".into();
+            self.connection_error = None;
         }
         for e in &events {
             if let Event::Dropped(_) = e {
@@ -532,6 +535,17 @@ mod tests {
         g.on_net("voicechat:secret", &body, None, Instant::now());
         assert!(g.session.is_some());
         assert_eq!(g.server_addr.unwrap().port(), 24454);
+    }
+
+    #[test]
+    fn malformed_secret_is_reported_without_creating_a_session() {
+        let mut g = glue();
+        g.world_open();
+        let accepted = g.on_net("voicechat:secret", &[1, 2, 3], None, Instant::now());
+        assert!(!accepted);
+        assert!(g.session.is_none());
+        assert_eq!(g.connection_stage, "SECRET recibido, pero no se pudo decodificar");
+        assert!(g.connection_error.as_deref().unwrap().contains("malformado"));
     }
 
     #[test]
