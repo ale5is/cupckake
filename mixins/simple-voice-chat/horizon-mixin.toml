@@ -9,7 +9,3 @@ horizon_revision = "9f42064c11efe7ef3e5ed2baad7ddc2a3b36eea0"
 
 [api]
 path = "api"
-
-[[crate]]
-id = "svc_client"
-path = "crates/svc_client"
