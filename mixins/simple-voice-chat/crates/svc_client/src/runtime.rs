@@ -43,6 +43,8 @@ pub struct Glue {
     pub group_id: Option<u128>,
     pub group_name: Option<String>,
     pub server_addr: Option<SocketAddr>,
+    /// Resolved host of the game connection, used when the server omits voice_host.
+    pub server_host_hint: Option<String>,
     pub mute_all: bool,
     pub muted_players: HashSet<u128>,
     pub show_hud: bool,
@@ -80,6 +82,7 @@ impl Default for Glue {
             group_id: None,
             group_name: None,
             server_addr: None,
+            server_host_hint: None,
             mute_all: false,
             muted_players: HashSet::new(),
             show_hud: true,
@@ -123,6 +126,7 @@ impl Glue {
     pub fn world_open(&mut self) {
         self.session = None;
         self.server_addr = None;
+        self.server_host_hint = None;
         self.group_id = None;
         self.group_name = None;
         self.ptt_held = false;
@@ -168,11 +172,27 @@ impl Glue {
                 self.connection_stage = "SECRET recibido y decodificado".into();
                 self.connection_error = None;
                 let host = if voice_host.is_empty() {
-                    hint.unwrap_or("127.0.0.1").to_string()
+                    hint.or(self.server_host_hint.as_deref())
                 } else {
-                    resolve_host(&voice_host)
+                    Some(voice_host.as_str())
                 };
-                let target = socket_of(&host, port);
+                let Some(host) = host.filter(|host| !host.is_empty()) else {
+                    self.connection_stage = "SECRET recibido, pero no hay dirección del servidor para UDP".into();
+                    self.connection_error = Some("voice_host está vacío y Horizon no proporcionó el host del servidor".into());
+                    self.connection_requested = false;
+                    self.server_addr = None;
+                    return true;
+                };
+                let target = match socket_of(host, port) {
+                    Ok(target) => target,
+                    Err(error) => {
+                        self.connection_stage = "No se pudo resolver el destino UDP".into();
+                        self.connection_error = Some(format!("UDP destination: {error}"));
+                        self.connection_requested = false;
+                        self.server_addr = None;
+                        return true;
+                    }
+                };
                 self.server_addr = Some(target);
                 let mut s = Session::new(player);
                 s.set_max_distance(distance);
@@ -468,25 +488,16 @@ fn host_of(addr: SocketAddr) -> String {
     }
 }
 
-fn resolve_host(host: &str) -> String {
-    use std::net::ToSocketAddrs;
-    format!("{}:0", host)
+fn socket_of(host: &str, port: u16) -> Result<SocketAddr, String> {
+    use std::net::{IpAddr, ToSocketAddrs};
+    if let Ok(ip) = host.parse::<IpAddr>() {
+        return Ok(SocketAddr::new(ip, port));
+    }
+    (host, port)
         .to_socket_addrs()
-        .ok()
-        .and_then(|mut it| it.next())
-        .map(|a| host_of(a))
-        .unwrap_or_else(|| host.to_string())
-}
-
-fn socket_of(host: &str, port: u16) -> SocketAddr {
-    use std::net::ToSocketAddrs;
-    format!("{}:{}", host, port)
-        .to_socket_addrs()
-        .ok()
-        .and_then(|mut it| it.next())
-        .unwrap_or_else(|| {
-            ([127, 0, 0, 1], port).into()
-        })
+        .map_err(|error| format!("could not resolve {host}: {error}"))?
+        .next()
+        .ok_or_else(|| format!("no UDP address found for {host}"))
 }
 
 /// The shared state the helpers reach.
@@ -532,7 +543,7 @@ mod tests {
         assert!(!body.is_empty());
         let body = secret_bytes(7, 24454, 48.0);
         eprintln!("parse: {:?}", proto::read("voicechat:secret", &body));
-        g.on_net("voicechat:secret", &body, None, Instant::now());
+        g.on_net("voicechat:secret", &body, Some("127.0.0.1"), Instant::now());
         assert!(g.session.is_some());
         assert_eq!(g.server_addr.unwrap().port(), 24454);
     }
