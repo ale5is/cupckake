@@ -762,7 +762,7 @@ mod tests {
         .write();
         assert_eq!(auth, [&[5u8][..], &7u128.to_be_bytes(), &[3; 16]].concat());
         assert_eq!(ToServer::KeepAlive.write(), vec![8]);
-        assert_eq!(ToServer::ConnectionCheck.write(), vec![9]);
+        assert_eq!(ToServer::ConnectionCheck { nonce: [4; 16] }.write(), [&[9u8][..], &[4; 16]].concat());
         assert_eq!(ToServer::Ping { id: 1, timestamp: 2 }.write(), [&[7u8][..], &1u128.to_be_bytes(), &2i64.to_be_bytes()].concat());
 
         let sound = [
@@ -802,7 +802,9 @@ mod tests {
                 sequence: 2,
             })
         );
-        assert_eq!(FromServer::read(&[6]), Ok(FromServer::AuthenticateAck));
+        assert_eq!(FromServer::read(&[6]), Err(Malformed), "nonce is mandatory");
+        let auth_ack = [&[6u8][..], &[5; 16]].concat();
+        assert_eq!(FromServer::read(&auth_ack), Ok(FromServer::AuthenticateAck { nonce: [5; 16] }));
         assert_eq!(FromServer::read(&[10]), Ok(FromServer::ConnectionCheckAck));
         assert_eq!(FromServer::read(&[1]), Err(Malformed), "a client's packet");
     }
