@@ -55,7 +55,7 @@ pub struct Session {
     last_keep_alive: Instant,
     last_ping: Instant,
     last_seen: Instant,
-    connection_check_nonce: Option<[u8; 16]>,
+    connection_check_nonce: Option<Option<[u8; 16]>>,
     last_connection_check: Instant,
     auth_started: Instant,
     events: Vec<Event>,
@@ -473,10 +473,10 @@ mod tests {
             other => panic!("expected Authenticate, got {other:?}"),
         }
         let nonce = [0xAB; 16];
-        srv.send_packet(&FromServer::AuthenticateAck { nonce });
+        srv.send_packet(&FromServer::AuthenticateAck { nonce: Some(nonce) });
         assert!(s.pump().is_empty(), "AuthenticateAck alone must not connect");
         assert_eq!(s.state(), State::Connecting);
-        assert!(matches!(srv.recv_packet(), ToServer::ConnectionCheck { nonce: got } if got == nonce));
+        assert!(matches!(srv.recv_packet(), ToServer::ConnectionCheck { nonce: Some(got) } if got == nonce));
 
         srv.send_packet(&FromServer::ConnectionCheckAck);
         assert_eq!(s.pump(), vec![Event::Connected]);
