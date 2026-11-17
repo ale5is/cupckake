@@ -6,7 +6,7 @@ This repository produces a native Horizon mod package (.hnmod). Install the pack
 
 ## Download and install
 
-1. Download `simple_voice_chat-1.0.11.hnmod` from the [1.0.11 GitHub Release](https://github.com/ale5is/cupckake/releases/tag/simple-voice-chat-v1.0.11).
+1. Download `simple_voice_chat-1.0.11.hnmod` from the latest successful [Simple Voice Chat compatibility workflow](https://github.com/ale5is/cupckake/actions/workflows/compatibility.yml) artifact (`simple-voice-chat-hnmod-pr` while testing this pull request).
 2. Import/install the `.hnmod` through Horizon's native Mods interface for the desired instance.
 3. Accept Horizon's native-code trust warning.
 4. Build the instance from Horizon's Mods page.
