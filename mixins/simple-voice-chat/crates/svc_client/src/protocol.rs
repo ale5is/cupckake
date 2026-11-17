@@ -402,7 +402,7 @@ pub enum ToServer {
         timestamp: i64,
     },
     KeepAlive,
-    ConnectionCheck,
+    ConnectionCheck { nonce: [u8; 16] },
 }
 
 impl ToServer {
@@ -421,7 +421,7 @@ impl ToServer {
             }
             Self::Ping { id, timestamp } => o.byte(7).uuid(*id).long(*timestamp),
             Self::KeepAlive => o.byte(8),
-            Self::ConnectionCheck => o.byte(9),
+            Self::ConnectionCheck { nonce } => { o.byte(9); o.0.extend_from_slice(nonce); }
         };
         o.done()
     }
@@ -444,7 +444,7 @@ pub enum FromServer<'a> {
         data: &'a [u8],
         sequence: i64,
     },
-    AuthenticateAck,
+    AuthenticateAck { nonce: [u8; 16] },
     Ping {
         id: u128,
         timestamp: i64,
@@ -484,7 +484,7 @@ impl<'a> FromServer<'a> {
                     sequence,
                 }
             }
-            6 => Self::AuthenticateAck,
+            6 => Self::AuthenticateAck { nonce: r.take(16)?.try_into().map_err(|_| Malformed)? },
             7 => Self::Ping {
                 id: r.uuid()?,
                 timestamp: r.long()?,
@@ -510,7 +510,7 @@ impl FromServer<'_> {
                 o.byte(3).uuid(*sender).uuid(0).bytes(data).long(*sequence).byte(0);
                 &mut o
             }
-            Self::AuthenticateAck => o.byte(6),
+            Self::AuthenticateAck { nonce } => { o.byte(6); o.0.extend_from_slice(nonce); }
             Self::Ping { id, timestamp } => o.byte(7).uuid(*id).long(*timestamp),
             Self::KeepAlive => o.byte(8),
             Self::ConnectionCheckAck => o.byte(10),
@@ -536,7 +536,7 @@ impl ToServer {
             }
             7 => Self::Ping { id: r.uuid()?, timestamp: r.long()? },
             8 => Self::KeepAlive,
-            9 => Self::ConnectionCheck,
+            9 => Self::ConnectionCheck { nonce: r.take(16)?.try_into().map_err(|_| Malformed)? },
             _ => return Err(Malformed),
         })
     }
