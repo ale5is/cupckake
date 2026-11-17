@@ -454,6 +454,32 @@ mod tests {
     }
 
     #[test]
+    fn legacy_handshake_without_nonce_connects() {
+        let secret = [6u8; 16];
+        let player = 12u128;
+        let (mut srv, addr) = MockServer::bind(secret);
+        let mut s = Session::new(player);
+        s.on_secret(secret, addr).unwrap();
+
+        match srv.recv_packet() {
+            ToServer::Authenticate { player: p, secret: got } => {
+                assert_eq!(p, player);
+                assert_eq!(got, secret);
+            }
+            other => panic!("expected Authenticate, got {other:?}"),
+        }
+
+        srv.send_packet(&FromServer::AuthenticateAck { nonce: None });
+        assert!(s.pump().is_empty(), "AuthenticateAck alone must not connect");
+        assert_eq!(s.state(), State::Connecting);
+        assert!(matches!(srv.recv_packet(), ToServer::ConnectionCheck { nonce: None }));
+
+        srv.send_packet(&FromServer::ConnectionCheckAck);
+        assert_eq!(s.pump(), vec![Event::Connected]);
+        assert_eq!(s.state(), State::Connected);
+    }
+
+    #[test]
     fn handshake_keep_alive_mic_and_voice() {
         let secret = [7u8; 16];
         let player = 11u128;
