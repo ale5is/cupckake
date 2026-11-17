@@ -55,6 +55,8 @@ pub struct Session {
     last_keep_alive: Instant,
     last_ping: Instant,
     last_seen: Instant,
+    connection_check_nonce: Option<[u8; 16]>,
+    last_connection_check: Instant,
     auth_started: Instant,
     events: Vec<Event>,
     last_error: Option<String>,
@@ -87,6 +89,8 @@ impl Session {
             last_keep_alive: Instant::now(),
             last_ping: Instant::now(),
             last_seen: Instant::now(),
+            connection_check_nonce: None,
+            last_connection_check: Instant::now() - Duration::from_secs(1),
             auth_started: Instant::now(),
             events: Vec::new(),
             last_error: None,
@@ -149,6 +153,8 @@ impl Session {
             secret,
         })?;
         self.state = State::Connecting;
+        self.connection_check_nonce = None;
+        self.last_connection_check = Instant::now();
         self.auth_started = Instant::now();
         self.last_seen = self.auth_started;
         Ok(())
@@ -160,6 +166,7 @@ impl Session {
         self.cipher = None;
         self.server = None;
         self.state = State::Idle;
+        self.connection_check_nonce = None;
         self.events.clear();
         self.last_error = None;
     }
@@ -196,21 +203,18 @@ impl Session {
         });
     }
 
-    /// The keep-alive and ping clocks; call once per frame while connected.
+    /// Retry the nonce challenge until the server confirms the UDP path.
     pub fn tick(&mut self) {
-        if self.state != State::Connected {
+        if self.state != State::Connecting {
             return;
         }
-        if self.last_keep_alive.elapsed() >= self.keep_alive_every {
-            self.last_keep_alive = Instant::now();
-            let _ = self.send(&ToServer::KeepAlive);
-        }
-        if self.last_ping.elapsed() >= self.ping_every {
-            self.last_ping = Instant::now();
-            let _ = self.send(&ToServer::Ping {
-                id: self.player,
-                timestamp: unix_ms(),
-            });
+        if let Some(nonce) = self.connection_check_nonce {
+            if self.last_connection_check.elapsed() >= self.keep_alive_every {
+                self.last_connection_check = Instant::now();
+                if let Err(error) = self.send(&ToServer::ConnectionCheck { nonce }) {
+                    self.last_error = Some(format!("UDP ConnectionCheck: {error}"));
+                }
+            }
         }
     }
 
@@ -249,7 +253,11 @@ impl Session {
             && self.auth_started.elapsed() >= TIMEOUT_AFTER
             && self.last_error.is_none()
         {
-            self.last_error = Some("no AuthenticateAck received within 15 seconds".into());
+            self.last_error = Some(if self.connection_check_nonce.is_some() {
+                "AuthenticateAck received, but ConnectionCheckAck was not received within 15 seconds".into()
+            } else {
+                "no AuthenticateAck received within 15 seconds".into()
+            });
         }
         if self.state == State::Connected && self.last_seen.elapsed() >= TIMEOUT_AFTER {
             self.state = State::Idle;
@@ -294,13 +302,35 @@ impl Session {
         self.last_udp_error = None;
         self.last_seen = Instant::now();
         match packet {
-            FromServer::AuthenticateAck => {
-                if self.state == State::Connecting {
+            FromServer::AuthenticateAck { nonce } => {
+                if self.state == State::Connecting && self.connection_check_nonce.is_none() {
+                    self.connection_check_nonce = Some(nonce);
+                    self.last_connection_check = Instant::now() - self.keep_alive_every;
+                    if let Err(error) = self.send(&ToServer::ConnectionCheck { nonce }) {
+                        self.last_error = Some(format!("UDP ConnectionCheck: {error}"));
+                    } else {
+                        self.last_connection_check = Instant::now();
+                    }
+                }
+            }
+            FromServer::ConnectionCheckAck => {
+                if self.state == State::Connecting && self.connection_check_nonce.is_some() {
                     self.state = State::Connected;
+                    self.last_keep_alive = Instant::now();
+                    self.last_seen = Instant::now();
                     self.events.push(Event::Connected);
                 }
             }
-            FromServer::KeepAlive | FromServer::Ping { .. } | FromServer::ConnectionCheckAck => {}
+            FromServer::KeepAlive => {
+                if let Err(error) = self.send(&ToServer::KeepAlive) {
+                    self.last_error = Some(format!("UDP KeepAlive response: {error}"));
+                }
+            }
+            FromServer::Ping { id, timestamp } => {
+                if let Err(error) = self.send(&ToServer::Ping { id, timestamp }) {
+                    self.last_error = Some(format!("UDP Ping response: {error}"));
+                }
+            }
             FromServer::Positional {
                 sender,
                 data,
