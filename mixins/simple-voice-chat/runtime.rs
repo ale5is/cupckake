@@ -108,20 +108,31 @@ pub fn on_command(command: &str, ran: &mut bool) {
     let (feedback, outbound) = locked().on_command(command.trim_start_matches('/'));
     for (channel, body) in outbound { queue_outbound(channel, body); } if !feedback.is_empty() { eprintln!("[voice] {feedback}"); } *ran = true;
 }
+static REMOTE_ACTIVE: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
 pub fn on_frame(game: &mut crate::game::Game<'_>, _elapsed: std::time::Duration) {
-    let mut g = locked();
-    let _ = g.on_frame(Instant::now());
-    if g.reconnect_pending {
-        g.reconnect_pending = false;
-        g.session = None;
-        g.connection_requested = true;
-        let (channel, body) = Glue::handshake();
-        drop(g);
-        queue_outbound(channel, body);
-    } else {
-        drop(g);
+    let connected = game
+        .remote
+        .as_ref()
+        .is_some_and(|remote| remote.logged_in && remote.reconfiguring.is_none());
+    let was_connected = REMOTE_ACTIVE.swap(connected, std::sync::atomic::Ordering::Relaxed);
+
+    if connected && !was_connected {
+        world_open_ready(game);
+    } else if !connected && was_connected {
+        world_closed();
     }
-    let _ = game;
+
+    let reconnect = {
+        let mut g = locked();
+        let _ = g.on_frame(Instant::now());
+        std::mem::take(&mut g.reconnect_pending)
+    };
+    if connected && reconnect {
+        let (channel, body) = Glue::handshake();
+        queue_outbound(channel, body);
+    }
 }
 pub fn listed(mods: &mut Vec<crate::game::native_hooks::NativeMod>) {
     mods.push(crate::game::native_hooks::NativeMod { id: ID.into(), title: format!("{NAME} {VERSION}"), description: DESCRIPTION.into(), keys: vec![
