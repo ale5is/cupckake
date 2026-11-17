@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import hashlib
 import json
+import re
 import sys
 import tomllib
 import zipfile
@@ -44,6 +45,11 @@ def main():
     mod_id = mod["id"]
     version = mod["version"]
 
+    runtime_source = (BUNDLE / "runtime.rs").read_text(encoding="utf-8")
+    runtime_version = re.search(r'pub const VERSION: &str = "([^"]+)";', runtime_source)
+    if runtime_version is None or runtime_version.group(1) != version:
+        raise SystemExit("Runtime VERSION and horizon-mixin.toml version do not match")
+
     if not (BUNDLE / "runtime.rs").is_file():
         raise SystemExit("Missing runtime.rs")
     if not (mod_id and mod_id.replace("_", "").isalnum() and mod_id == mod_id.lower()):
@@ -71,6 +77,9 @@ def main():
     files = {
         "horizon-native.json": (json.dumps(manifest, indent=2, sort_keys=True) + "\n").encode()
     }
+    root_manifest = json.loads((ROOT / "horizon-native.json").read_text(encoding="utf-8"))
+    if root_manifest != manifest:
+        raise SystemExit("Root horizon-native.json is stale; synchronize it with the mixin and compatibility metadata")
     crate_relatives = [Path(c["path"]) for c in mixin.get("crate", [])]
     data_dirs = [Path("data")] + [p / "data" for p in crate_relatives]
     for path in sorted(BUNDLE.rglob("*")):
