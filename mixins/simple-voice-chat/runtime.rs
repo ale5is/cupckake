@@ -5,7 +5,7 @@ pub use svc_client::runtime::{state, Glue};
 
 pub const ID: &str = "simple_voice_chat";
 pub const NAME: &str = "Simple Voice Chat";
-pub const VERSION: &str = "1.0.11";
+pub const VERSION: &str = "1.0.12";
 pub const DESCRIPTION: &str = "Proximity voice chat, push-to-talk, player mute controls and a live voice HUD.";
 static OUT: Mutex<Vec<(String, Vec<u8>)>> = Mutex::new(Vec::new());
 static NET_ERROR: Mutex<Option<String>> = Mutex::new(None);
@@ -22,7 +22,7 @@ fn record_net_rx(source: &str, channel: &str, data: &[u8]) {
     }
     let detail = format!("{source}: {channel} ({} bytes)", data.len());
     *LAST_RX.lock().unwrap_or_else(|e| e.into_inner()) = Some(detail.clone());
-    eprintln!("[SimpleVoiceChat 1.0.11] RX {detail}");
+    eprintln!("[SimpleVoiceChat {VERSION}] RX {detail}");
 }
 fn locked() -> std::sync::MutexGuard<'static, Glue> { state().lock().unwrap_or_else(|e| e.into_inner()) }
 pub fn queue_outbound(channel: String, body: Vec<u8>) { OUT.lock().unwrap_or_else(|e| e.into_inner()).push((channel, body)); }
@@ -129,7 +129,7 @@ fn on_net_with_hint(channel: &str, data: &[u8], hint: Option<&str>) {
         let state = g.session.as_ref().map(|s| format!("{:?}", s.state())).unwrap_or_else(|| "sin sesión".into());
         let result = format!("procesado={secret_processed}; estado={state}; etapa={}; servidor={:?}; error={:?}", g.connection_stage, g.server_addr, g.connection_error);
         *LAST_SECRET_RESULT.lock().unwrap_or_else(|e| e.into_inner()) = Some(result.clone());
-        eprintln!("[SimpleVoiceChat 1.0.11] SECRET {result} host_hint={hint:?}");
+        eprintln!("[SimpleVoiceChat {VERSION}] SECRET {result} host_hint={hint:?}");
     }
     if channel == protocol::SECRET && secret_processed {
         *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
