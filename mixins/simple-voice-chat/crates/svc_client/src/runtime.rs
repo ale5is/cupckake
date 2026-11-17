@@ -347,7 +347,7 @@ impl Glue {
             self.connection_stage = "ConnectionCheckAck recibido; conexión UDP validada".into();
             self.connection_error = None;
         } else if s.connection_check_pending() {
-            self.connection_stage = "AuthenticateAck recibido; enviando ConnectionCheck con nonce; esperando ConnectionCheckAck".into();
+            self.connection_stage = "AuthenticateAck recibido; enviando ConnectionCheck; esperando ConnectionCheckAck".into();
             self.connection_error = None;
         } else if s.state() == crate::session::State::Connecting {
             self.connection_stage = "Socket UDP creado; Authenticate enviado; esperando AuthenticateAck".into();
