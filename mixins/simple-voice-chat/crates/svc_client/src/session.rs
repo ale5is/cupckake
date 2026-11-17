@@ -58,6 +58,13 @@ pub struct Session {
     auth_started: Instant,
     events: Vec<Event>,
     last_error: Option<String>,
+    udp_rx_total: u64,
+    udp_rx_accepted: u64,
+    udp_rx_ignored: u64,
+    udp_tx_total: u64,
+    last_udp_source: Option<SocketAddr>,
+    last_ignored_source: Option<SocketAddr>,
+    last_udp_error: Option<String>,
 }
 
 impl Session {
@@ -83,6 +90,13 @@ impl Session {
             auth_started: Instant::now(),
             events: Vec::new(),
             last_error: None,
+            udp_rx_total: 0,
+            udp_rx_accepted: 0,
+            udp_rx_ignored: 0,
+            udp_tx_total: 0,
+            last_udp_source: None,
+            last_ignored_source: None,
+            last_udp_error: None,
         }
     }
 
@@ -91,6 +105,10 @@ impl Session {
     }
     pub fn last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
+    }
+    pub fn udp_diagnostics(&self) -> (u64, u64, u64, u64, Option<SocketAddr>, Option<SocketAddr>, Option<&str>) {
+        (self.udp_rx_total, self.udp_rx_accepted, self.udp_rx_ignored, self.udp_tx_total,
+         self.last_udp_source, self.last_ignored_source, self.last_udp_error.as_deref())
     }
     pub fn muted(&self) -> bool {
         self.muted
@@ -158,6 +176,7 @@ impl Session {
         })?;
         let datagram = client_datagram(self.player, &sealed);
         let sent = socket.send_to(&datagram, server)?;
+        self.udp_tx_total = self.udp_tx_total.saturating_add(1);
         if sent != datagram.len() {
             return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "incomplete UDP datagram send"));
         }
@@ -203,13 +222,21 @@ impl Session {
             loop {
                 match socket.recv_from(&mut buf) {
                     Ok((n, from)) => {
+                        self.udp_rx_total = self.udp_rx_total.saturating_add(1);
+                        self.last_udp_source = Some(from);
                         if Some(from) == self.server {
+                            self.udp_rx_accepted = self.udp_rx_accepted.saturating_add(1);
                             datagrams.push(buf[..n].to_vec());
+                        } else {
+                            self.udp_rx_ignored = self.udp_rx_ignored.saturating_add(1);
+                            self.last_ignored_source = Some(from);
+                            self.last_udp_error = Some(format!("datagrama descartado: origen {from} distinto del servidor esperado {:?}", self.server));
                         }
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
                     Err(error) => {
                         self.last_error = Some(format!("UDP recv_from: {error}"));
+                        self.last_udp_error = self.last_error.clone();
                         break;
                     }
                 }
@@ -235,12 +262,14 @@ impl Session {
         let plain = {
             let Some(cipher) = self.cipher.as_ref() else {
                 self.last_error = Some("UDP cipher is not initialized".into());
+                self.last_udp_error = self.last_error.clone();
                 return;
             };
             let sealed = match server_datagram(datagram) {
                 Ok(s) => s,
                 Err(_) => {
                     self.last_error = Some("invalid UDP datagram header or length".into());
+                    self.last_udp_error = self.last_error.clone();
                     return;
                 }
             };
@@ -248,6 +277,7 @@ impl Session {
                 Some(p) => p,
                 None => {
                     self.last_error = Some("UDP AES-GCM authentication failed".into());
+                    self.last_udp_error = self.last_error.clone();
                     return;
                 }
             }
@@ -256,10 +286,12 @@ impl Session {
             Ok(p) => p,
             Err(_) => {
                 self.last_error = Some("unknown or malformed Simple Voice Chat UDP packet".into());
+                self.last_udp_error = self.last_error.clone();
                 return;
             }
         };
         self.last_error = None;
+        self.last_udp_error = None;
         self.last_seen = Instant::now();
         match packet {
             FromServer::AuthenticateAck => {
