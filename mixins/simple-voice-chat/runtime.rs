@@ -12,11 +12,13 @@ static NET_ERROR: Mutex<Option<String>> = Mutex::new(None);
 static RX_TOTAL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 static RX_SECRET: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 static LAST_RX: Mutex<Option<String>> = Mutex::new(None);
+static LAST_SECRET_RESULT: Mutex<Option<String>> = Mutex::new(None);
 fn record_net_rx(source: &str, channel: &str, data: &[u8]) {
     if !channel.starts_with("voicechat:") { return; }
     RX_TOTAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     if channel == protocol::SECRET {
         RX_SECRET.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        *LAST_SECRET_RESULT.lock().unwrap_or_else(|e| e.into_inner()) = Some(format!("{source}: recibido ({} bytes); procesando", data.len()));
     }
     let detail = format!("{source}: {channel} ({} bytes)", data.len());
     *LAST_RX.lock().unwrap_or_else(|e| e.into_inner()) = Some(detail.clone());
@@ -89,6 +91,7 @@ pub fn world_open_ready(game: &mut crate::game::Game<'_>) {
     RX_TOTAL.store(0, std::sync::atomic::Ordering::Relaxed);
     RX_SECRET.store(0, std::sync::atomic::Ordering::Relaxed);
     *LAST_RX.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    *LAST_SECRET_RESULT.lock().unwrap_or_else(|e| e.into_inner()) = None;
     let server_host_hint = game.server_address().as_deref().and_then(server_host);
     load_preferences(game);
     let mut g = locked();
@@ -121,10 +124,10 @@ fn on_net_with_hint(channel: &str, data: &[u8], hint: Option<&str>) {
     let mut g = locked();
     let secret_processed = g.on_net(channel, data, hint, Instant::now());
     if channel == protocol::SECRET {
-        eprintln!(
-            "[SimpleVoiceChat 1.0.7] SECRET processed={} host_hint={:?} stage={} server={:?} error={:?}",
-            secret_processed, hint, g.connection_stage, g.server_addr, g.connection_error
-        );
+        let state = g.session.as_ref().map(|s| format!("{:?}", s.state())).unwrap_or_else(|| "sin sesión".into());
+        let result = format!("procesado={secret_processed}; estado={state}; etapa={}; servidor={:?}; error={:?}", g.connection_stage, g.server_addr, g.connection_error);
+        *LAST_SECRET_RESULT.lock().unwrap_or_else(|e| e.into_inner()) = Some(result.clone());
+        eprintln!("[SimpleVoiceChat 1.0.7] SECRET {result} host_hint={hint:?}");
     }
     if channel == protocol::SECRET && secret_processed {
         *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -360,6 +363,9 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
             RX_TOTAL.load(std::sync::atomic::Ordering::Relaxed),
             RX_SECRET.load(std::sync::atomic::Ordering::Relaxed)
         ));
+        if let Some(result) = LAST_SECRET_RESULT.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            lines.push(format!("Resultado SECRET: {result}"));
+        }
         if let Some(last) = LAST_RX.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
             lines.push(format!("Último RX: {last}"));
         }
