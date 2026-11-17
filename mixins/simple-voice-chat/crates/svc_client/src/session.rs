@@ -147,6 +147,7 @@ impl Session {
     /// The server's secret reply arrived; open the UDP socket and authenticate.
     pub fn on_secret(&mut self, secret: [u8; 16], server: SocketAddr) -> std::io::Result<()> {
         let socket = UdpSocket::bind(if server.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" })?;
+        socket.connect(server)?;
         socket.set_nonblocking(true)?;
         self.socket = Some(socket);
         self.cipher = Some(Cipher::new(&secret));
@@ -175,8 +176,8 @@ impl Session {
     }
 
     fn send(&mut self, packet: &ToServer) -> std::io::Result<()> {
-        let (Some(cipher), Some(server)) = (self.cipher.as_ref(), self.server) else {
-            return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "UDP session is not initialized"));
+        let Some(cipher) = self.cipher.as_ref() else {
+            return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "UDP cipher is not initialized"));
         };
         let socket = self.socket.as_ref().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::NotConnected, "UDP socket is not initialized")
@@ -185,7 +186,7 @@ impl Session {
             std::io::Error::new(std::io::ErrorKind::InvalidData, "could not encrypt UDP packet")
         })?;
         let datagram = client_datagram(self.player, &sealed);
-        let sent = socket.send_to(&datagram, server)?;
+        let sent = socket.send(&datagram)?;
         self.udp_tx_total = self.udp_tx_total.saturating_add(1);
         if sent != datagram.len() {
             return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "incomplete UDP datagram send"));
@@ -227,22 +228,16 @@ impl Session {
         if let Some(socket) = &self.socket {
             let mut buf = [0u8; 4096];
             loop {
-                match socket.recv_from(&mut buf) {
-                    Ok((n, from)) => {
+                match socket.recv(&mut buf) {
+                    Ok(n) => {
                         self.udp_rx_total = self.udp_rx_total.saturating_add(1);
-                        self.last_udp_source = Some(from);
-                        if Some(from) == self.server {
-                            self.udp_rx_accepted = self.udp_rx_accepted.saturating_add(1);
-                            datagrams.push(buf[..n].to_vec());
-                        } else {
-                            self.udp_rx_ignored = self.udp_rx_ignored.saturating_add(1);
-                            self.last_ignored_source = Some(from);
-                            self.last_udp_error = Some(format!("datagrama descartado: origen {from} distinto del servidor esperado {:?}", self.server));
-                        }
+                        self.udp_rx_accepted = self.udp_rx_accepted.saturating_add(1);
+                        self.last_udp_source = self.server;
+                        datagrams.push(buf[..n].to_vec());
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
                     Err(error) => {
-                        self.last_error = Some(format!("UDP recv_from: {error}"));
+                        self.last_error = Some(format!("UDP recv: {error}"));
                         self.last_udp_error = self.last_error.clone();
                         break;
                     }
