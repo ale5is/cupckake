@@ -53,13 +53,27 @@ pub fn load_preferences(game: &crate::game::Game<'_>) {
     let mut g = locked(); g.cfg.muted = muted; g.mute_all = mute_all; g.show_hud = show_hud; g.show_debug = show_debug; g.hud_corner = hud_corner; g.muted_players = muted_players;
     if let Some(session) = &mut g.session { session.set_muted(muted); }
 }
-fn resolve_server_host(address: &str) -> Option<String> {
-    use std::net::ToSocketAddrs;
-    address.to_socket_addrs().ok()?.next().map(|address| address.ip().to_string())
+fn server_host(address: &str) -> Option<String> {
+    let address = address.trim();
+    if let Ok(socket) = address.parse::<std::net::SocketAddr>() {
+        return Some(socket.ip().to_string());
+    }
+    if let Some(bracketed) = address.strip_prefix('[')
+        && let Some(end) = bracketed.find(']')
+    {
+        return Some(bracketed[..end].to_string());
+    }
+    if let Some((host, port)) = address.rsplit_once(':')
+        && !host.contains(':')
+        && port.parse::<u16>().is_ok()
+    {
+        return Some(host.to_string());
+    }
+    if address.is_empty() { None } else { Some(address.to_string()) }
 }
 pub fn world_open_ready(game: &mut crate::game::Game<'_>) {
     *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
-    let server_host_hint = game.server_address().and_then(resolve_server_host);
+    let server_host_hint = game.server_address().as_deref().and_then(server_host);
     load_preferences(game);
     let mut g = locked();
     g.world_open();
@@ -73,8 +87,21 @@ pub fn world_lifecycle(game: &mut crate::game::Game<'_>, phase: &crate::game::na
     match phase { WorldOpenReady => world_open_ready(game), WorldCloseFinal | WorldCloseFailed => world_closed(), _ => {} }
 }
 pub fn on_net(channel: &str, data: &[u8]) {
+    on_net_with_hint(channel, data, None);
+}
+
+pub fn on_net_from_remote(
+    game: &crate::game::Game<'_>,
+    channel: &str,
+    data: &[u8],
+) {
+    let hint = server_host(&game.session.address);
+    on_net_with_hint(channel, data, hint.as_deref());
+}
+
+fn on_net_with_hint(channel: &str, data: &[u8], hint: Option<&str>) {
     let mut g = locked();
-    let secret_processed = g.on_net(channel, data, None, Instant::now());
+    let secret_processed = g.on_net(channel, data, hint, Instant::now());
     if channel == protocol::SECRET && secret_processed {
         *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let muted = g.cfg.muted;
