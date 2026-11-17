@@ -402,7 +402,7 @@ pub enum ToServer {
         timestamp: i64,
     },
     KeepAlive,
-    ConnectionCheck { nonce: [u8; 16] },
+    ConnectionCheck { nonce: Option<[u8; 16]> },
 }
 
 impl ToServer {
@@ -421,7 +421,7 @@ impl ToServer {
             }
             Self::Ping { id, timestamp } => o.byte(7).uuid(*id).long(*timestamp),
             Self::KeepAlive => o.byte(8),
-            Self::ConnectionCheck { nonce } => { o.byte(9); o.0.extend_from_slice(nonce); &mut o }
+            Self::ConnectionCheck { nonce } => { o.byte(9); if let Some(nonce) = nonce { o.0.extend_from_slice(nonce); } &mut o }
         };
         o.done()
     }
@@ -444,7 +444,7 @@ pub enum FromServer<'a> {
         data: &'a [u8],
         sequence: i64,
     },
-    AuthenticateAck { nonce: [u8; 16] },
+    AuthenticateAck { nonce: Option<[u8; 16]> },
     Ping {
         id: u128,
         timestamp: i64,
@@ -484,7 +484,14 @@ impl<'a> FromServer<'a> {
                     sequence,
                 }
             }
-            6 => Self::AuthenticateAck { nonce: r.take(16)?.try_into().map_err(|_| Malformed)? },
+            6 => {
+                let nonce = match r.rest.len() {
+                    0 => None,
+                    16 => Some(r.take(16)?.try_into().map_err(|_| Malformed)?),
+                    _ => return Err(Malformed),
+                };
+                Self::AuthenticateAck { nonce }
+            },
             7 => Self::Ping {
                 id: r.uuid()?,
                 timestamp: r.long()?,
@@ -510,7 +517,7 @@ impl FromServer<'_> {
                 o.byte(3).uuid(*sender).uuid(0).bytes(data).long(*sequence).byte(0);
                 &mut o
             }
-            Self::AuthenticateAck { nonce } => { o.byte(6); o.0.extend_from_slice(nonce); &mut o }
+            Self::AuthenticateAck { nonce } => { o.byte(6); if let Some(nonce) = nonce { o.0.extend_from_slice(nonce); } &mut o }
             Self::Ping { id, timestamp } => o.byte(7).uuid(*id).long(*timestamp),
             Self::KeepAlive => o.byte(8),
             Self::ConnectionCheckAck => o.byte(10),
@@ -536,7 +543,14 @@ impl ToServer {
             }
             7 => Self::Ping { id: r.uuid()?, timestamp: r.long()? },
             8 => Self::KeepAlive,
-            9 => Self::ConnectionCheck { nonce: r.take(16)?.try_into().map_err(|_| Malformed)? },
+            9 => {
+                let nonce = match r.rest.len() {
+                    0 => None,
+                    16 => Some(r.take(16)?.try_into().map_err(|_| Malformed)?),
+                    _ => return Err(Malformed),
+                };
+                Self::ConnectionCheck { nonce }
+            },
             _ => return Err(Malformed),
         })
     }
@@ -762,7 +776,8 @@ mod tests {
         .write();
         assert_eq!(auth, [&[5u8][..], &7u128.to_be_bytes(), &[3; 16]].concat());
         assert_eq!(ToServer::KeepAlive.write(), vec![8]);
-        assert_eq!(ToServer::ConnectionCheck { nonce: [4; 16] }.write(), [&[9u8][..], &[4; 16]].concat());
+        assert_eq!(ToServer::ConnectionCheck { nonce: Some([4; 16]) }.write(), [&[9u8][..], &[4; 16]].concat());
+        assert_eq!(ToServer::ConnectionCheck { nonce: None }.write(), vec![9]);
         assert_eq!(ToServer::Ping { id: 1, timestamp: 2 }.write(), [&[7u8][..], &1u128.to_be_bytes(), &2i64.to_be_bytes()].concat());
 
         let sound = [
@@ -802,9 +817,10 @@ mod tests {
                 sequence: 2,
             })
         );
-        assert_eq!(FromServer::read(&[6]), Err(Malformed), "nonce is mandatory");
+        assert_eq!(FromServer::read(&[6]), Ok(FromServer::AuthenticateAck { nonce: None }));
         let auth_ack = [&[6u8][..], &[5; 16]].concat();
-        assert_eq!(FromServer::read(&auth_ack), Ok(FromServer::AuthenticateAck { nonce: [5; 16] }));
+        assert_eq!(FromServer::read(&auth_ack), Ok(FromServer::AuthenticateAck { nonce: Some([5; 16]) }));
+        assert_eq!(FromServer::read(&[6, 1]), Err(Malformed), "invalid ACK length");
         assert_eq!(FromServer::read(&[10]), Ok(FromServer::ConnectionCheckAck));
         assert_eq!(FromServer::read(&[1]), Err(Malformed), "a client's packet");
     }
