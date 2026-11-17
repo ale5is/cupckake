@@ -32,8 +32,10 @@ pub fn on_net_send_result(channel: &str, result: Result<(), String>) {
         Ok(()) if channel == protocol::REQUEST_SECRET => {
             *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
             let mut g = locked();
-            g.connection_stage = "voicechat:request_secret enviado; esperando SECRET".into();
-            g.connection_error = None;
+            if g.connection_requested && g.session.is_none() {
+                g.connection_stage = "voicechat:request_secret enviado; esperando SECRET".into();
+                g.connection_error = None;
+            }
         }
         Err(message) => {
             *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = Some(message.clone());
