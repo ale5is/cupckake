@@ -296,7 +296,12 @@ impl Session {
         let packet = match FromServer::read(&plain) {
             Ok(p) => p,
             Err(_) => {
-                self.last_error = Some("unknown or malformed Simple Voice Chat UDP packet".into());
+                let packet_type = plain.first().map(|value| format!("0x{value:02X}"))
+                    .unwrap_or_else(|| "vacío".into());
+                self.last_error = Some(format!(
+                    "Simple Voice Chat UDP packet malformado: tipo={packet_type}, bytes_descifrados={}",
+                    plain.len()
+                ));
                 self.last_udp_error = self.last_error.clone();
                 return;
             }
