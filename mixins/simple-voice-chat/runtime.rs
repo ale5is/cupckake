@@ -5,7 +5,7 @@ pub use svc_client::runtime::{state, Glue};
 
 pub const ID: &str = "simple_voice_chat";
 pub const NAME: &str = "Simple Voice Chat";
-pub const VERSION: &str = "1.0.7";
+pub const VERSION: &str = "1.0.8";
 pub const DESCRIPTION: &str = "Proximity voice chat, push-to-talk, player mute controls and a live voice HUD.";
 static OUT: Mutex<Vec<(String, Vec<u8>)>> = Mutex::new(Vec::new());
 static NET_ERROR: Mutex<Option<String>> = Mutex::new(None);
@@ -22,7 +22,7 @@ fn record_net_rx(source: &str, channel: &str, data: &[u8]) {
     }
     let detail = format!("{source}: {channel} ({} bytes)", data.len());
     *LAST_RX.lock().unwrap_or_else(|e| e.into_inner()) = Some(detail.clone());
-    eprintln!("[SimpleVoiceChat 1.0.7] RX {detail}");
+    eprintln!("[SimpleVoiceChat 1.0.8] RX {detail}");
 }
 fn locked() -> std::sync::MutexGuard<'static, Glue> { state().lock().unwrap_or_else(|e| e.into_inner()) }
 pub fn queue_outbound(channel: String, body: Vec<u8>) { OUT.lock().unwrap_or_else(|e| e.into_inner()).push((channel, body)); }
@@ -129,7 +129,7 @@ fn on_net_with_hint(channel: &str, data: &[u8], hint: Option<&str>) {
         let state = g.session.as_ref().map(|s| format!("{:?}", s.state())).unwrap_or_else(|| "sin sesión".into());
         let result = format!("procesado={secret_processed}; estado={state}; etapa={}; servidor={:?}; error={:?}", g.connection_stage, g.server_addr, g.connection_error);
         *LAST_SECRET_RESULT.lock().unwrap_or_else(|e| e.into_inner()) = Some(result.clone());
-        eprintln!("[SimpleVoiceChat 1.0.7] SECRET {result} host_hint={hint:?}");
+        eprintln!("[SimpleVoiceChat 1.0.8] SECRET {result} host_hint={hint:?}");
     }
     if channel == protocol::SECRET && secret_processed {
         *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
@@ -372,6 +372,22 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
             lines.push(format!("Último RX: {last}"));
         }
         lines.push(format!("{}: {}", tr("server"), g.server_addr.map(|addr| addr.to_string()).unwrap_or_else(|| "—".into())));
+        if let Some(session) = g.session.as_ref() {
+            let (rx, accepted, ignored, tx, last_source, ignored_source, udp_error) = session.udp_diagnostics();
+            lines.push(format!("UDP RX: {rx} | aceptados: {accepted} | descartados: {ignored} | TX: {tx}"));
+            lines.push(format!("UDP último origen: {}", last_source.map(|v| v.to_string()).unwrap_or_else(|| "—".into())));
+            if let Some(source) = ignored_source {
+                lines.push(format!("UDP origen descartado: {source}"));
+            }
+            if let Some(error) = udp_error {
+                lines.push(format!("UDP detalle: {error}"));
+            }
+            if let Some(error) = session.last_error() {
+                lines.push(format!("UDP error protocolo: {error}"));
+            }
+        } else {
+            lines.push("UDP RX: 0 | aceptados: 0 | descartados: 0 | TX: 0".into());
+        }
         if let Some(error) = &g.connection_error {
             lines.push(format!("Error UDP: {error}"));
         }
