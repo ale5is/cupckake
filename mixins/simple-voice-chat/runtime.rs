@@ -9,6 +9,19 @@ pub const VERSION: &str = "1.0.7";
 pub const DESCRIPTION: &str = "Proximity voice chat, push-to-talk, player mute controls and a live voice HUD.";
 static OUT: Mutex<Vec<(String, Vec<u8>)>> = Mutex::new(Vec::new());
 static NET_ERROR: Mutex<Option<String>> = Mutex::new(None);
+static RX_TOTAL: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static RX_SECRET: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static LAST_RX: Mutex<Option<String>> = Mutex::new(None);
+fn record_net_rx(source: &str, channel: &str, data: &[u8]) {
+    if !channel.starts_with("voicechat:") { return; }
+    RX_TOTAL.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    if channel == protocol::SECRET {
+        RX_SECRET.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+    let detail = format!("{source}: {channel} ({} bytes)", data.len());
+    *LAST_RX.lock().unwrap_or_else(|e| e.into_inner()) = Some(detail.clone());
+    eprintln!("[SimpleVoiceChat 1.0.7] RX {detail}");
+}
 fn locked() -> std::sync::MutexGuard<'static, Glue> { state().lock().unwrap_or_else(|e| e.into_inner()) }
 pub fn queue_outbound(channel: String, body: Vec<u8>) { OUT.lock().unwrap_or_else(|e| e.into_inner()).push((channel, body)); }
 pub fn drain_outbound() -> Vec<(String, Vec<u8>)> { std::mem::take(&mut *OUT.lock().unwrap_or_else(|e| e.into_inner())) }
@@ -73,6 +86,9 @@ fn server_host(address: &str) -> Option<String> {
 }
 pub fn world_open_ready(game: &mut crate::game::Game<'_>) {
     *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    RX_TOTAL.store(0, std::sync::atomic::Ordering::Relaxed);
+    RX_SECRET.store(0, std::sync::atomic::Ordering::Relaxed);
+    *LAST_RX.lock().unwrap_or_else(|e| e.into_inner()) = None;
     let server_host_hint = game.server_address().as_deref().and_then(server_host);
     load_preferences(game);
     let mut g = locked();
@@ -87,6 +103,7 @@ pub fn world_lifecycle(game: &mut crate::game::Game<'_>, phase: &crate::game::na
     match phase { WorldOpenReady => world_open_ready(game), WorldCloseFinal | WorldCloseFailed => world_closed(), _ => {} }
 }
 pub fn on_net(channel: &str, data: &[u8]) {
+    record_net_rx("native_net_hook", channel, data);
     on_net_with_hint(channel, data, None);
 }
 
@@ -96,12 +113,19 @@ pub fn on_net_from_remote(
     data: &[u8],
 ) {
     let hint = game.remote.as_ref().and_then(|remote| server_host(&remote.session.address));
+    record_net_rx("packet_hook", channel, data);
     on_net_with_hint(channel, data, hint.as_deref());
 }
 
 fn on_net_with_hint(channel: &str, data: &[u8], hint: Option<&str>) {
     let mut g = locked();
     let secret_processed = g.on_net(channel, data, hint, Instant::now());
+    if channel == protocol::SECRET {
+        eprintln!(
+            "[SimpleVoiceChat 1.0.7] SECRET processed={} host_hint={:?} stage={} server={:?} error={:?}",
+            secret_processed, hint, g.connection_stage, g.server_addr, g.connection_error
+        );
+    }
     if channel == protocol::SECRET && secret_processed {
         *NET_ERROR.lock().unwrap_or_else(|e| e.into_inner()) = None;
         let muted = g.cfg.muted;
@@ -331,6 +355,14 @@ pub fn draw_hud(game: &mut crate::game::Game<'_>, batch: &mut horizon_client::hu
         };
         lines.push(format!("{}: {}", tr("udp"), udp));
         lines.push(format!("Etapa: {}", g.connection_stage));
+        lines.push(format!(
+            "RX voicechat: {} | SECRET: {}",
+            RX_TOTAL.load(std::sync::atomic::Ordering::Relaxed),
+            RX_SECRET.load(std::sync::atomic::Ordering::Relaxed)
+        ));
+        if let Some(last) = LAST_RX.lock().unwrap_or_else(|e| e.into_inner()).as_ref() {
+            lines.push(format!("Último RX: {last}"));
+        }
         lines.push(format!("{}: {}", tr("server"), g.server_addr.map(|addr| addr.to_string()).unwrap_or_else(|| "—".into())));
         if let Some(error) = &g.connection_error {
             lines.push(format!("Error UDP: {error}"));
