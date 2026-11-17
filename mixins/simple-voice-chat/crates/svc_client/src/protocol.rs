@@ -421,7 +421,7 @@ impl ToServer {
             }
             Self::Ping { id, timestamp } => o.byte(7).uuid(*id).long(*timestamp),
             Self::KeepAlive => o.byte(8),
-            Self::ConnectionCheck { nonce } => { o.byte(9); o.0.extend_from_slice(nonce); }
+            Self::ConnectionCheck { nonce } => { o.byte(9); o.0.extend_from_slice(nonce); &mut o }
         };
         o.done()
     }
@@ -510,7 +510,7 @@ impl FromServer<'_> {
                 o.byte(3).uuid(*sender).uuid(0).bytes(data).long(*sequence).byte(0);
                 &mut o
             }
-            Self::AuthenticateAck { nonce } => { o.byte(6); o.0.extend_from_slice(nonce); }
+            Self::AuthenticateAck { nonce } => { o.byte(6); o.0.extend_from_slice(nonce); &mut o }
             Self::Ping { id, timestamp } => o.byte(7).uuid(*id).long(*timestamp),
             Self::KeepAlive => o.byte(8),
             Self::ConnectionCheckAck => o.byte(10),
