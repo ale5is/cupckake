@@ -5,7 +5,7 @@ pub use svc_client::runtime::{state, Glue};
 
 pub const ID: &str = "simple_voice_chat";
 pub const NAME: &str = "Simple Voice Chat";
-pub const VERSION: &str = "1.0.5";
+pub const VERSION: &str = "1.0.7";
 pub const DESCRIPTION: &str = "Proximity voice chat, push-to-talk, player mute controls and a live voice HUD.";
 static OUT: Mutex<Vec<(String, Vec<u8>)>> = Mutex::new(Vec::new());
 static NET_ERROR: Mutex<Option<String>> = Mutex::new(None);
@@ -95,7 +95,7 @@ pub fn on_net_from_remote(
     channel: &str,
     data: &[u8],
 ) {
-    let hint = server_host(&game.session.address);
+    let hint = game.remote.as_ref().and_then(|remote| server_host(&remote.session.address));
     on_net_with_hint(channel, data, hint.as_deref());
 }
 
