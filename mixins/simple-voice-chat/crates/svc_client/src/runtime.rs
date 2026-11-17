@@ -199,7 +199,7 @@ impl Glue {
                 s.set_muted(self.cfg.muted);
                 match s.on_secret(secret, target) {
                     Ok(()) => {
-                        self.connection_stage = "Socket UDP creado; Authenticate enviado; esperando AuthenticateAck".into();
+                        self.connection_stage = "Authenticate enviado; esperando AuthenticateAck".into();
                         self.connection_error = None;
                     }
                     Err(error) => {
@@ -344,7 +344,10 @@ impl Glue {
             self.connection_stage = "Error al recibir o validar paquetes UDP".into();
             self.connection_error = Some(error);
         } else if s.state() == crate::session::State::Connected {
-            self.connection_stage = "AuthenticateAck recibido; UDP autenticado".into();
+            self.connection_stage = "ConnectionCheckAck recibido; conexión UDP validada".into();
+            self.connection_error = None;
+        } else if s.connection_check_pending() {
+            self.connection_stage = "AuthenticateAck recibido; enviando ConnectionCheck con nonce; esperando ConnectionCheckAck".into();
             self.connection_error = None;
         } else if s.state() == crate::session::State::Connecting {
             self.connection_stage = "Socket UDP creado; Authenticate enviado; esperando AuthenticateAck".into();
