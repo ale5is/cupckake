@@ -12,6 +12,22 @@ file = "crates/horizon-client/src/game.rs"
 name = "simple_voice_chat"
 source = "runtime.rs"
 
+[[module]]
+id = "voicechat_network"
+file = "crates/horizon-client/src/game/remote.rs"
+name = "voicechat_network"
+source = "network.rs"
+
+[[injection]]
+id = "voicechat_payload"
+kind = "HEAD"
+target = "horizon_client::game::remote::Game<'_>::handle_packet"
+helper = "payload.rs"
+bindings = [
+  { name = "game", ty = "&mut crate::game::Game<'_>", value = "&mut *self" },
+  { name = "packet", ty = "&horizon_protocol::packets::play::Clientbound", value = "&packet" },
+]
+
 [[injection]]
 id = "world_lifecycle"
 kind = "HEAD"
