@@ -107,6 +107,9 @@ impl Session {
     pub fn state(&self) -> State {
         self.state
     }
+    pub fn connection_check_pending(&self) -> bool {
+        self.state == State::Connecting && self.connection_check_nonce.is_some()
+    }
     pub fn last_error(&self) -> Option<&str> {
         self.last_error.as_deref()
     }
@@ -464,22 +467,24 @@ mod tests {
             }
             other => panic!("expected Authenticate, got {other:?}"),
         }
-        srv.send_packet(&FromServer::AuthenticateAck);
+        let nonce = [0xAB; 16];
+        srv.send_packet(&FromServer::AuthenticateAck { nonce });
+        assert!(s.pump().is_empty(), "AuthenticateAck alone must not connect");
+        assert_eq!(s.state(), State::Connecting);
+        assert!(matches!(srv.recv_packet(), ToServer::ConnectionCheck { nonce: got } if got == nonce));
+
+        srv.send_packet(&FromServer::ConnectionCheckAck);
         assert_eq!(s.pump(), vec![Event::Connected]);
         assert_eq!(s.state(), State::Connected);
 
-        // The clocks: keep-alive every frame, ping with the wall clock.
-        s.keep_alive_every = Duration::ZERO;
-        s.ping_every = Duration::ZERO;
-        s.tick();
+        srv.send_packet(&FromServer::KeepAlive);
+        assert!(s.pump().is_empty());
         assert!(matches!(srv.recv_packet(), ToServer::KeepAlive));
-        match srv.recv_packet() {
-            ToServer::Ping { id, timestamp } => {
-                assert_eq!(id, player);
-                assert!(timestamp > 0);
-            }
-            other => panic!("expected Ping, got {other:?}"),
-        }
+
+        let ping = FromServer::Ping { id: player, timestamp: 12345 };
+        srv.send_packet(&ping);
+        assert!(s.pump().is_empty());
+        assert!(matches!(srv.recv_packet(), ToServer::Ping { id, timestamp } if id == player && timestamp == 12345));
 
         // The mic goes out sealed, sequence starting at one.
         s.push_mic(&[1, 2, 3]);
