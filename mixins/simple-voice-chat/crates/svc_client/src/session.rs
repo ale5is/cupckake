@@ -135,6 +135,10 @@ impl Session {
     pub fn forget_position(&mut self, who: u128) {
         self.positions.remove(&who);
     }
+
+    pub fn clear_positions(&mut self) {
+        self.positions.clear();
+    }
     pub fn set_max_distance(&mut self, d: f64) {
         self.max_distance = d.max(1.0);
     }
@@ -434,6 +438,15 @@ mod tests {
                 .send_to(&datagram, self.from.unwrap())
                 .unwrap();
         }
+    }
+
+    #[test]
+    fn clear_positions_removes_stale_player_locations() {
+        let mut s = Session::new(1);
+        s.set_position(22, [3.0, 4.0, 5.0]);
+        assert_eq!(s.positions.get(&22), Some(&[3.0, 4.0, 5.0]));
+        s.clear_positions();
+        assert!(!s.positions.contains_key(&22));
     }
 
     #[test]
