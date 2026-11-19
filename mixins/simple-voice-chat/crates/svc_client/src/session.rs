@@ -211,18 +211,37 @@ impl Session {
         });
     }
 
-    /// Retry the nonce challenge until the server confirms the UDP path.
+    /// Drive the UDP handshake and the periodic traffic required by the server.
     pub fn tick(&mut self) {
-        if self.state != State::Connecting {
-            return;
-        }
-        if let Some(nonce) = self.connection_check_nonce {
-            if self.last_connection_check.elapsed() >= self.keep_alive_every {
-                self.last_connection_check = Instant::now();
-                if let Err(error) = self.send(&ToServer::ConnectionCheck { nonce }) {
-                    self.last_error = Some(format!("UDP ConnectionCheck: {error}"));
+        match self.state {
+            State::Connecting => {
+                if let Some(nonce) = self.connection_check_nonce {
+                    if self.last_connection_check.elapsed() >= self.keep_alive_every {
+                        self.last_connection_check = Instant::now();
+                        if let Err(error) = self.send(&ToServer::ConnectionCheck { nonce }) {
+                            self.last_error = Some(format!("UDP ConnectionCheck: {error}"));
+                        }
+                    }
                 }
             }
+            State::Connected => {
+                if self.last_keep_alive.elapsed() >= self.keep_alive_every {
+                    self.last_keep_alive = Instant::now();
+                    if let Err(error) = self.send(&ToServer::KeepAlive) {
+                        self.last_error = Some(format!("UDP KeepAlive: {error}"));
+                    }
+                }
+                if self.last_ping.elapsed() >= self.ping_every {
+                    self.last_ping = Instant::now();
+                    if let Err(error) = self.send(&ToServer::Ping {
+                        id: self.player,
+                        timestamp: unix_ms(),
+                    }) {
+                        self.last_error = Some(format!("UDP Ping: {error}"));
+                    }
+                }
+            }
+            State::Idle | State::RequestingSecret => {}
         }
     }
 
@@ -324,6 +343,7 @@ impl Session {
                 if self.state == State::Connecting && self.connection_check_nonce.is_some() {
                     self.state = State::Connected;
                     self.last_keep_alive = Instant::now();
+                    self.last_ping = Instant::now();
                     self.last_seen = Instant::now();
                     self.events.push(Event::Connected);
                 }
@@ -515,6 +535,13 @@ mod tests {
         srv.send_packet(&FromServer::ConnectionCheckAck);
         assert_eq!(s.pump(), vec![Event::Connected]);
         assert_eq!(s.state(), State::Connected);
+
+        // The client must originate keep-alive and ping traffic after connecting.
+        s.keep_alive_every = Duration::ZERO;
+        s.ping_every = Duration::ZERO;
+        s.tick();
+        assert!(matches!(srv.recv_packet(), ToServer::KeepAlive));
+        assert!(matches!(srv.recv_packet(), ToServer::Ping { id, timestamp } if id == player && timestamp > 0));
 
         srv.send_packet(&FromServer::KeepAlive);
         assert!(s.pump().is_empty());
