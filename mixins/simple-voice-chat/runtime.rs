@@ -5,7 +5,7 @@ pub use svc_client::runtime::{state, Glue};
 
 pub const ID: &str = "simple_voice_chat";
 pub const NAME: &str = "Simple Voice Chat";
-pub const VERSION: &str = "1.0.12";
+pub const VERSION: &str = "1.0.13";
 pub const DESCRIPTION: &str = "Proximity voice chat, push-to-talk, player mute controls and a live voice HUD.";
 static OUT: Mutex<Vec<(String, Vec<u8>)>> = Mutex::new(Vec::new());
 static NET_ERROR: Mutex<Option<String>> = Mutex::new(None);
@@ -139,7 +139,6 @@ fn on_net_with_hint(channel: &str, data: &[u8], hint: Option<&str>) {
         queue_outbound(protocol::UPDATE_STATE.to_string(), protocol::update_state(muted));
     }
 }
-pub fn on_player_submit(_player: &crate::game::native_mob_draw::NativeMobRender<'_>, _who: &crate::game::native_mob_draw::NativePlayerRender<'_>) {}
 pub fn on_key(game: &mut crate::game::Game<'_>, key: &str, pressed: bool) {
     let ptt = game.native_mod_key(ID, "ptt", "key.keyboard.v");
     let mute = game.native_mod_key(ID, "mute", "key.keyboard.m");
@@ -168,6 +167,33 @@ static REMOTE_ACTIVE: std::sync::atomic::AtomicBool =
     std::sync::atomic::AtomicBool::new(false);
 
 pub fn on_frame(game: &mut crate::game::Game<'_>, _elapsed: std::time::Duration) {
+    let listener = game.player.as_ref().map(|player| [
+        player.position.x,
+        player.position.y,
+        player.position.z,
+    ]);
+    let player_positions: Vec<(u128, [f64; 3])> = game.mobs.iter().filter_map(|mob| {
+        if mob.kind.id != "minecraft:player" {
+            return None;
+        }
+        let uuid = game.persist.uuids.get(&mob.id).copied()?;
+        Some((
+            horizon_client::lan::playerdata::ints_uuid(uuid),
+            [mob.position.x, mob.position.y, mob.position.z],
+        ))
+    }).collect();
+    {
+        let mut g = locked();
+        if let Some(session) = &mut g.session {
+            if let Some(position) = listener {
+                session.set_listener(position);
+            }
+            session.clear_positions();
+            for (uuid, position) in player_positions {
+                session.set_position(uuid, position);
+            }
+        }
+    }
     let connected = game
         .remote
         .as_ref()
