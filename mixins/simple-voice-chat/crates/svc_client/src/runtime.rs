@@ -8,7 +8,7 @@
 use std::collections::{HashMap, HashSet};
 use std::net::SocketAddr;
 use std::sync::{Mutex, OnceLock};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 
 use crate::protocol as proto;
 use crate::session::{Event, Session};
@@ -168,7 +168,7 @@ impl Glue {
             }
         };
         match msg {
-            proto::ServerMessage::Secret { secret, port, player, distance, voice_host, .. } => {
+            proto::ServerMessage::Secret { secret, port, player, distance, keep_alive_ms, voice_host, .. } => {
                 self.connection_stage = "SECRET recibido y decodificado".into();
                 self.connection_error = None;
                 let host = if voice_host.is_empty() {
@@ -196,6 +196,7 @@ impl Glue {
                 self.server_addr = Some(target);
                 let mut s = Session::new(player);
                 s.set_max_distance(distance);
+                s.keep_alive_every = Duration::from_millis(keep_alive_ms.max(1) as u64);
                 s.set_muted(self.cfg.muted);
                 match s.on_secret(secret, target) {
                     Ok(()) => {
@@ -347,7 +348,7 @@ impl Glue {
             self.connection_stage = "ConnectionCheckAck recibido; conexión UDP validada".into();
             self.connection_error = None;
         } else if s.connection_check_pending() {
-            self.connection_stage = "AuthenticateAck recibido; enviando ConnectionCheck con nonce; esperando ConnectionCheckAck".into();
+            self.connection_stage = "AuthenticateAck recibido; enviando ConnectionCheck; esperando ConnectionCheckAck".into();
             self.connection_error = None;
         } else if s.state() == crate::session::State::Connecting {
             self.connection_stage = "Socket UDP creado; Authenticate enviado; esperando AuthenticateAck".into();
@@ -520,7 +521,7 @@ mod tests {
 
     use std::time::Instant;
 
-    fn secret_bytes(player: u128, port: u16, distance: f64) -> Vec<u8> {
+    fn secret_bytes(player: u128, port: u16, distance: f64, keep_alive_ms: i32) -> Vec<u8> {
         let mut out = Vec::new();
         // The secret reply body: fixed secret, port, player uuid, codec, mtu,
         // distance, keep-alive, groups flag, voice host, recording flag.
@@ -530,7 +531,7 @@ mod tests {
         out.push(0);
         out.extend_from_slice(&1024i32.to_be_bytes());
         out.extend_from_slice(&distance.to_be_bytes());
-        out.extend_from_slice(&1000i32.to_be_bytes());
+        out.extend_from_slice(&keep_alive_ms.to_be_bytes());
         out.push(1); // groups allowed
         out.push(0); // voice host: empty
         out.push(0); // recording not allowed
@@ -544,7 +545,7 @@ mod tests {
         let (channel, body) = Glue::handshake();
         assert_eq!(channel, "voicechat:request_secret");
         assert!(!body.is_empty());
-        let body = secret_bytes(7, 24454, 48.0);
+        let body = secret_bytes(7, 24454, 48.0, 1000);
         eprintln!("parse: {:?}", proto::read("voicechat:secret", &body));
         g.on_net("voicechat:secret", &body, Some("127.0.0.1"), Instant::now());
         assert!(g.session.is_some());
@@ -552,10 +553,23 @@ mod tests {
     }
 
     #[test]
+    fn server_keep_alive_interval_is_applied_to_the_udp_session() {
+        let mut g = glue();
+        g.world_open();
+        let body = secret_bytes(7, 24454, 48.0, 375);
+        let accepted = g.on_net("voicechat:secret", &body, Some("127.0.0.1"), Instant::now());
+        assert!(accepted);
+        assert_eq!(
+            g.session.as_ref().unwrap().keep_alive_every,
+            Duration::from_millis(375)
+        );
+    }
+
+    #[test]
     fn empty_voice_host_requires_the_actual_game_server_host() {
         let mut g = glue();
         g.world_open();
-        let body = secret_bytes(7, 24454, 48.0);
+        let body = secret_bytes(7, 24454, 48.0, 1000);
         let accepted = g.on_net("voicechat:secret", &body, None, Instant::now());
         assert!(accepted);
         assert!(g.session.is_none());
@@ -567,7 +581,7 @@ mod tests {
     fn invalid_voice_host_is_reported_instead_of_using_loopback() {
         let mut g = glue();
         g.world_open();
-        let mut body = secret_bytes(7, 24454, 48.0);
+        let mut body = secret_bytes(7, 24454, 48.0, 1000);
         // Replace the empty voice_host VarInt with a deliberately invalid hostname.
         body.pop();
         body.pop();

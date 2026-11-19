@@ -1,6 +1,6 @@
 [mod]
 id = "simple_voice_chat"
-version = "1.0.10"
+version = "1.0.13"
 priority = 100
 
 [compatibility]
@@ -48,17 +48,6 @@ helper = "net.rs"
 bindings = [
   { name = "channel", ty = "&str", value = "channel" },
   { name = "data", ty = "&[u8]", value = "data" },
-]
-
-[[injection]]
-id = "player_submit"
-kind = "HEAD"
-hook = "player_submit"
-hook_version = 1
-helper = "players.rs"
-bindings = [
-  { name = "player", ty = "&crate::game::native_mob_draw::NativeMobRender<'_>", value = "player" },
-  { name = "who", ty = "&crate::game::native_mob_draw::NativePlayerRender<'_>", value = "who" },
 ]
 
 [[injection]]

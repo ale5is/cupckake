@@ -55,7 +55,7 @@ pub struct Session {
     last_keep_alive: Instant,
     last_ping: Instant,
     last_seen: Instant,
-    connection_check_nonce: Option<[u8; 16]>,
+    connection_check_nonce: Option<Option<[u8; 16]>>,
     last_connection_check: Instant,
     auth_started: Instant,
     events: Vec<Event>,
@@ -135,6 +135,10 @@ impl Session {
     pub fn forget_position(&mut self, who: u128) {
         self.positions.remove(&who);
     }
+
+    pub fn clear_positions(&mut self) {
+        self.positions.clear();
+    }
     pub fn set_max_distance(&mut self, d: f64) {
         self.max_distance = d.max(1.0);
     }
@@ -147,6 +151,7 @@ impl Session {
     /// The server's secret reply arrived; open the UDP socket and authenticate.
     pub fn on_secret(&mut self, secret: [u8; 16], server: SocketAddr) -> std::io::Result<()> {
         let socket = UdpSocket::bind(if server.is_ipv4() { "0.0.0.0:0" } else { "[::]:0" })?;
+        socket.connect(server)?;
         socket.set_nonblocking(true)?;
         self.socket = Some(socket);
         self.cipher = Some(Cipher::new(&secret));
@@ -175,8 +180,8 @@ impl Session {
     }
 
     fn send(&mut self, packet: &ToServer) -> std::io::Result<()> {
-        let (Some(cipher), Some(server)) = (self.cipher.as_ref(), self.server) else {
-            return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "UDP session is not initialized"));
+        let Some(cipher) = self.cipher.as_ref() else {
+            return Err(std::io::Error::new(std::io::ErrorKind::NotConnected, "UDP cipher is not initialized"));
         };
         let socket = self.socket.as_ref().ok_or_else(|| {
             std::io::Error::new(std::io::ErrorKind::NotConnected, "UDP socket is not initialized")
@@ -185,7 +190,7 @@ impl Session {
             std::io::Error::new(std::io::ErrorKind::InvalidData, "could not encrypt UDP packet")
         })?;
         let datagram = client_datagram(self.player, &sealed);
-        let sent = socket.send_to(&datagram, server)?;
+        let sent = socket.send(&datagram)?;
         self.udp_tx_total = self.udp_tx_total.saturating_add(1);
         if sent != datagram.len() {
             return Err(std::io::Error::new(std::io::ErrorKind::WriteZero, "incomplete UDP datagram send"));
@@ -206,18 +211,37 @@ impl Session {
         });
     }
 
-    /// Retry the nonce challenge until the server confirms the UDP path.
+    /// Drive the UDP handshake and the periodic traffic required by the server.
     pub fn tick(&mut self) {
-        if self.state != State::Connecting {
-            return;
-        }
-        if let Some(nonce) = self.connection_check_nonce {
-            if self.last_connection_check.elapsed() >= self.keep_alive_every {
-                self.last_connection_check = Instant::now();
-                if let Err(error) = self.send(&ToServer::ConnectionCheck { nonce }) {
-                    self.last_error = Some(format!("UDP ConnectionCheck: {error}"));
+        match self.state {
+            State::Connecting => {
+                if let Some(nonce) = self.connection_check_nonce {
+                    if self.last_connection_check.elapsed() >= self.keep_alive_every {
+                        self.last_connection_check = Instant::now();
+                        if let Err(error) = self.send(&ToServer::ConnectionCheck { nonce }) {
+                            self.last_error = Some(format!("UDP ConnectionCheck: {error}"));
+                        }
+                    }
                 }
             }
+            State::Connected => {
+                if self.last_keep_alive.elapsed() >= self.keep_alive_every {
+                    self.last_keep_alive = Instant::now();
+                    if let Err(error) = self.send(&ToServer::KeepAlive) {
+                        self.last_error = Some(format!("UDP KeepAlive: {error}"));
+                    }
+                }
+                if self.last_ping.elapsed() >= self.ping_every {
+                    self.last_ping = Instant::now();
+                    if let Err(error) = self.send(&ToServer::Ping {
+                        id: self.player,
+                        timestamp: unix_ms(),
+                    }) {
+                        self.last_error = Some(format!("UDP Ping: {error}"));
+                    }
+                }
+            }
+            State::Idle | State::RequestingSecret => {}
         }
     }
 
@@ -227,22 +251,16 @@ impl Session {
         if let Some(socket) = &self.socket {
             let mut buf = [0u8; 4096];
             loop {
-                match socket.recv_from(&mut buf) {
-                    Ok((n, from)) => {
+                match socket.recv(&mut buf) {
+                    Ok(n) => {
                         self.udp_rx_total = self.udp_rx_total.saturating_add(1);
-                        self.last_udp_source = Some(from);
-                        if Some(from) == self.server {
-                            self.udp_rx_accepted = self.udp_rx_accepted.saturating_add(1);
-                            datagrams.push(buf[..n].to_vec());
-                        } else {
-                            self.udp_rx_ignored = self.udp_rx_ignored.saturating_add(1);
-                            self.last_ignored_source = Some(from);
-                            self.last_udp_error = Some(format!("datagrama descartado: origen {from} distinto del servidor esperado {:?}", self.server));
-                        }
+                        self.udp_rx_accepted = self.udp_rx_accepted.saturating_add(1);
+                        self.last_udp_source = self.server;
+                        datagrams.push(buf[..n].to_vec());
                     }
                     Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => break,
                     Err(error) => {
-                        self.last_error = Some(format!("UDP recv_from: {error}"));
+                        self.last_error = Some(format!("UDP recv: {error}"));
                         self.last_udp_error = self.last_error.clone();
                         break;
                     }
@@ -325,6 +343,7 @@ impl Session {
                 if self.state == State::Connecting && self.connection_check_nonce.is_some() {
                     self.state = State::Connected;
                     self.last_keep_alive = Instant::now();
+                    self.last_ping = Instant::now();
                     self.last_seen = Instant::now();
                     self.events.push(Event::Connected);
                 }
@@ -442,6 +461,15 @@ mod tests {
     }
 
     #[test]
+    fn clear_positions_removes_stale_player_locations() {
+        let mut s = Session::new(1);
+        s.set_position(22, [3.0, 4.0, 5.0]);
+        assert_eq!(s.positions.get(&22), Some(&[3.0, 4.0, 5.0]));
+        s.clear_positions();
+        assert!(!s.positions.contains_key(&22));
+    }
+
+    #[test]
     fn authentication_ack_timeout_is_reported() {
         let mut s = Session::new(1);
         s.state = State::Connecting;
@@ -451,6 +479,32 @@ mod tests {
             s.last_error(),
             Some("no AuthenticateAck received within 15 seconds")
         );
+    }
+
+    #[test]
+    fn legacy_handshake_without_nonce_connects() {
+        let secret = [6u8; 16];
+        let player = 12u128;
+        let (mut srv, addr) = MockServer::bind(secret);
+        let mut s = Session::new(player);
+        s.on_secret(secret, addr).unwrap();
+
+        match srv.recv_packet() {
+            ToServer::Authenticate { player: p, secret: got } => {
+                assert_eq!(p, player);
+                assert_eq!(got, secret);
+            }
+            other => panic!("expected Authenticate, got {other:?}"),
+        }
+
+        srv.send_packet(&FromServer::AuthenticateAck { nonce: None });
+        assert!(s.pump().is_empty(), "AuthenticateAck alone must not connect");
+        assert_eq!(s.state(), State::Connecting);
+        assert!(matches!(srv.recv_packet(), ToServer::ConnectionCheck { nonce: None }));
+
+        srv.send_packet(&FromServer::ConnectionCheckAck);
+        assert_eq!(s.pump(), vec![Event::Connected]);
+        assert_eq!(s.state(), State::Connected);
     }
 
     #[test]
@@ -473,14 +527,21 @@ mod tests {
             other => panic!("expected Authenticate, got {other:?}"),
         }
         let nonce = [0xAB; 16];
-        srv.send_packet(&FromServer::AuthenticateAck { nonce });
+        srv.send_packet(&FromServer::AuthenticateAck { nonce: Some(nonce) });
         assert!(s.pump().is_empty(), "AuthenticateAck alone must not connect");
         assert_eq!(s.state(), State::Connecting);
-        assert!(matches!(srv.recv_packet(), ToServer::ConnectionCheck { nonce: got } if got == nonce));
+        assert!(matches!(srv.recv_packet(), ToServer::ConnectionCheck { nonce: Some(got) } if got == nonce));
 
         srv.send_packet(&FromServer::ConnectionCheckAck);
         assert_eq!(s.pump(), vec![Event::Connected]);
         assert_eq!(s.state(), State::Connected);
+
+        // The client must originate keep-alive and ping traffic after connecting.
+        s.keep_alive_every = Duration::ZERO;
+        s.ping_every = Duration::ZERO;
+        s.tick();
+        assert!(matches!(srv.recv_packet(), ToServer::KeepAlive));
+        assert!(matches!(srv.recv_packet(), ToServer::Ping { id, timestamp } if id == player && timestamp > 0));
 
         srv.send_packet(&FromServer::KeepAlive);
         assert!(s.pump().is_empty());
